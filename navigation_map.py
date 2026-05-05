@@ -73,6 +73,7 @@ class Navigation_map:
         self.planner_model = None
         self.semantic_model = None
         self.processor = None
+        self.use_kv_cache = False
         self.root = root
         self.now = root
         self.current_inference = 0
@@ -101,8 +102,10 @@ class Navigation_map:
             else:
                 raise ValueError("Parent key not found in the tree")
             self.now = child
-            self.get_node_group(self.planner_model,self.now)
-        self.compute_kv(self.now,[])    
+            if self.use_kv_cache and self.planner_model is not None and self.processor is not None:
+                self.get_node_group(self.planner_model,self.now)
+        if self.use_kv_cache and self.planner_model is not None and self.processor is not None:
+            self.compute_kv(self.now,[])
 
     def get_group_kv(self,group,node,current_node):
         group_kv = None

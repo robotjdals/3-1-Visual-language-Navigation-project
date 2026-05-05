@@ -1,0 +1,19 @@
+SR: 6.0
+SPL: 4.086931228637695
+Total Episodes: 6
+Total Length: 54.919036865234375
+Easy SR: 4.0
+Easy SPL: 2.5946078300476074
+Easy Episodes: 4
+Easy Length: 29.102285385131836
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 2.0
+Hard SPL: 1.4923232793807983
+Hard Episodes: 2
+Hard Length: 25.816753387451172
+SR eposion: [0, 1, 2, 3, 4, 5]
+SR subgoal: ['plant', 'sofa', 'chair', 'plant', 'tv', 'chair']
+num_node: 9
