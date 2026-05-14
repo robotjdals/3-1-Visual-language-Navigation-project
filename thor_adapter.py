@@ -8,7 +8,7 @@ import prior
 from ai2thor.controller import Controller
 
 
-def load_procthor_houses(seed=7, split="train"):
+def load_procthor_houses(seed=7, split="train", shuffle=True):
     dataset = prior.load_dataset("procthor-10k")
     houses = []
     if split is not None:
@@ -28,8 +28,9 @@ def load_procthor_houses(seed=7, split="train"):
                     houses.extend(list(dataset[split_name]))
                 except (KeyError, TypeError, IndexError):
                     continue
-    rng = random.Random(seed)
-    rng.shuffle(houses)
+    if shuffle:
+        rng = random.Random(seed)
+        rng.shuffle(houses)
     return houses
 
 

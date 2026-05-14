@@ -1,4 +1,5 @@
 import json
+import re
 import torch
 import numpy as np
 from typing import List, Tuple, Optional
@@ -12,6 +13,12 @@ width_weight = 0.001
 gpu_node_num = 20
 use_pruning = True
 layer_threshold = 5
+low_information_memory_labels = {"wall", "floor", "ceiling"}
+frontier_memory_labels = {"doorway", "door frame", "door", "window"}
+structural_phrase_tokens = {
+    "a", "an", "the", "of", "with", "corner", "wall", "floor", "ceiling",
+    "tiled", "pattern"
+}
 
 class TreeNode:
     def __init__(self, key: str, position: List[float], direction: float, waypoint = None, distance_to_parent: float = 0.0, parent: Optional['TreeNode'] = None, picture = None, describe = None):
@@ -29,6 +36,7 @@ class TreeNode:
         self.current_inference = 0
         self.state = 'explorable'
         self.group = None
+        self.describe_kv_signature = None
 
     def add_child(self, child_node: 'TreeNode'):
         child_node.parent = self
@@ -72,6 +80,8 @@ class Navigation_map:
     def __init__(self, root: Optional[TreeNode] = None):
         self.planner_model = None
         self.semantic_model = None
+        self.semantic_tokenizer = None
+        self.semantic_max_length = None
         self.processor = None
         self.use_kv_cache = False
         self.root = root
@@ -87,6 +97,231 @@ class Navigation_map:
         self.device_map = None
         self.used_groups = []
         self.place_clip_id = []
+        self.kv_cache_supported = True
+
+    def disable_kv_cache(self, reason: str):
+        self.use_kv_cache = False
+        self.kv_cache_supported = False
+        print(f"[Debug] disabling KV cache fallback: {reason}")
+
+    def _normalize_similarity_text(self, text):
+        normalized = str(text or "").strip().lower()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    def _canonical_similarity_label(self, label):
+        normalized = self._normalize_similarity_text(label)
+        alias_map = {
+            "television": "tv",
+            "tvstand": "tv",
+            "couch": "sofa",
+            "armchair": "chair",
+            "diningchair": "chair",
+            "houseplant": "plant",
+        }
+        return alias_map.get(normalized, normalized)
+
+    def _compact_similarity_label(self, label):
+        normalized = self._normalize_similarity_text(label)
+        if not normalized:
+            return ""
+
+        keyword_groups = [
+            ({"toilet"}, "toilet"),
+            ({"sink"}, "sink"),
+            ({"doorway", "door", "doors", "doorframe", "frame"}, "doorway"),
+            ({"window", "windows"}, "window"),
+            ({"mirror"}, "mirror"),
+            ({"television", "tv", "tvstand"}, "tv"),
+            ({"sofa", "couch"}, "sofa"),
+            ({"chair", "chairs", "armchair", "diningchair"}, "chair"),
+            ({"table", "diningtable", "desk"}, "table"),
+            ({"plant", "houseplant", "vase"}, "plant"),
+            ({"statue", "sculpture"}, "statue"),
+            ({"lamp"}, "lamp"),
+            ({"bed"}, "bed"),
+            ({"wall", "walls"}, "wall"),
+            ({"floor", "floors"}, "floor"),
+            ({"ceiling", "ceilings"}, "ceiling"),
+        ]
+        tokens = [token for token in re.findall(r"[a-z0-9]+", normalized) if token]
+        token_set = set(tokens)
+        for keywords, canonical in keyword_groups:
+            if token_set & keywords:
+                return canonical
+
+        filtered_tokens = [
+            token for token in tokens
+            if token not in {
+                "there", "is", "are", "the", "a", "an", "of", "in", "on", "at",
+                "to", "from", "with", "and", "behind", "side", "image", "room",
+                "outside", "inside", "left", "right", "made", "up", "that",
+                "this", "these", "those", "reflecting", "closed", "open", "silver",
+                "light", "blue", "grey", "gray", "rectangular", "tiles", "tile",
+            }
+        ]
+        if not filtered_tokens:
+            return ""
+        return " ".join(filtered_tokens[:3])
+
+    def _description_signature_text(self, raw_description):
+        labels = self._extract_description_labels(raw_description)
+        if not labels:
+            return ""
+        compact_labels = []
+        seen = set()
+        for label in labels:
+            compact_label = self._compact_similarity_label(label)
+            if compact_label and compact_label not in seen:
+                compact_labels.append(compact_label)
+                seen.add(compact_label)
+        return " ".join(compact_labels)
+
+    def _node_description_text(self, node, final_goal_label=None, last_key=None, last_index=None):
+        if node is None or not node.describe:
+            return ""
+        if last_key is not None and last_index is not None and final_goal_label is not None:
+            selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
+        else:
+            selected_indices = list(range(len(node.describe)))
+        parts = [
+            self._description_signature_text(node.describe[i])
+            for i in selected_indices
+            if 0 <= i < len(node.describe)
+        ]
+        return self._normalize_similarity_text(" ".join(parts))
+
+    def _encode_similarity_text(self, text):
+        normalized_text = self._normalize_similarity_text(text)
+        if not normalized_text:
+            return None
+        if self.semantic_model is None or self.semantic_tokenizer is None:
+            return None
+        model_device = next(self.semantic_model.parameters()).device
+        max_length = self.semantic_max_length
+        if max_length is None:
+            tokenizer_max_length = getattr(self.semantic_tokenizer, "model_max_length", None)
+            if isinstance(tokenizer_max_length, int) and 0 < tokenizer_max_length < 100000:
+                max_length = tokenizer_max_length
+        tokenizer_kwargs = {"return_tensors": "pt", "truncation": True}
+        if max_length is not None:
+            tokenizer_kwargs["max_length"] = max_length
+        inputs = self.semantic_tokenizer(normalized_text, **tokenizer_kwargs).to(model_device)
+        with torch.no_grad():
+            text_embedding = self.semantic_model(**inputs).last_hidden_state
+            attention_mask = inputs.get("attention_mask")
+            if attention_mask is not None:
+                mask = attention_mask.unsqueeze(-1).to(text_embedding.dtype)
+                text_embedding = (text_embedding * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)
+            else:
+                text_embedding = text_embedding.mean(dim=1)
+            text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
+        return text_embedding[0].detach().cpu().numpy()
+
+    def _similarity_score(self, text_a, text_b):
+        embedding_a = self._encode_similarity_text(text_a)
+        embedding_b = self._encode_similarity_text(text_b)
+        if embedding_a is not None and embedding_b is not None:
+            similarity = float(np.dot(embedding_a, embedding_b))
+            if not math.isnan(similarity):
+                return similarity
+
+        tokens_a = set(re.findall(r"[a-z0-9]+", self._normalize_similarity_text(text_a)))
+        tokens_b = set(re.findall(r"[a-z0-9]+", self._normalize_similarity_text(text_b)))
+        if not tokens_a or not tokens_b:
+            return 0.0
+        return len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
+
+    def _collect_group_texts(self, node, current_node):
+        group_texts = {}
+        if node is None:
+            return group_texts
+        if node.key != current_node.key and node.group is not None:
+            node_text = self._node_description_text(node)
+            if node_text:
+                group_texts.setdefault(node.group, []).append(node_text)
+        for child in node.children:
+            child_texts = self._collect_group_texts(child, current_node)
+            for group_id, texts in child_texts.items():
+                group_texts.setdefault(group_id, []).extend(texts)
+        return group_texts
+
+    def _get_group_prefix_text(self, group, node, current_node):
+        prefix_parts = []
+        if node.group == group and node.key != current_node.key:
+            node_text = self._node_description_text(node)
+            if node_text:
+                prefix_parts.append(node_text)
+        for child in node.children:
+            child_prefix = self._get_group_prefix_text(group, child, current_node)
+            if child_prefix:
+                prefix_parts.append(child_prefix)
+        return " ".join(part for part in prefix_parts if part)
+
+    def _build_cache_from_text(self, describe_text, past_key_values=None):
+        normalized_text = self._normalize_similarity_text(describe_text)
+        if not normalized_text:
+            return None
+        conversation_kv = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": normalized_text},
+                ],
+            }
+        ]
+        prompt_kv = self.processor.apply_chat_template(
+            conversation_kv,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        inputs_kv = self.processor(prompt_kv, padding=True, return_tensors="pt").to("cuda:0")
+        runtime_cache = self._legacy_to_dynamic_cache(past_key_values)
+        with torch.no_grad():
+            output_kv = self.planner_model(
+                input_ids=inputs_kv["input_ids"],
+                use_cache=True,
+                past_key_values=runtime_cache,
+            )
+        return self._extract_legacy_kv_cache(
+            output_kv.past_key_values,
+            inputs_kv["input_ids"].shape[1],
+        )
+
+    def _extract_legacy_kv_cache(self, past_key_values, seq_len: int):
+        legacy_cache = []
+        for layer in getattr(past_key_values, "layers", []):
+            if hasattr(layer, "keys") and hasattr(layer, "values"):
+                key_tensor = layer.keys
+                value_tensor = layer.values
+            else:
+                raise TypeError(
+                    f"unsupported cache layer type for EfficientNav KV reuse: {type(layer).__name__}"
+                )
+            legacy_cache.append(
+                (
+                    key_tensor[:, :, -seq_len:, :],
+                    value_tensor[:, :, -seq_len:, :],
+                )
+            )
+        if not legacy_cache:
+            raise TypeError(
+                f"unsupported past_key_values type for EfficientNav KV reuse: {type(past_key_values).__name__}"
+            )
+        return tuple(legacy_cache)
+
+    def _legacy_to_dynamic_cache(self, legacy_cache):
+        if legacy_cache is None or isinstance(legacy_cache, Cache):
+            return legacy_cache
+        if not isinstance(legacy_cache, tuple):
+            raise TypeError(f"unsupported legacy cache type: {type(legacy_cache).__name__}")
+        cache = DynamicCache()
+        for layer_idx, layer_cache in enumerate(legacy_cache):
+            if not isinstance(layer_cache, tuple) or len(layer_cache) != 2:
+                raise TypeError(f"invalid layer cache format at layer {layer_idx}")
+            key_states, value_states = layer_cache
+            cache.update(key_states, value_states, layer_idx)
+        return cache
 
     def add_node(self, parent_key: str, key: str, position: List[float], direction: float, waypoint, distance_to_parent: float,picture,describe):
         if not self.root:
@@ -102,55 +337,28 @@ class Navigation_map:
             else:
                 raise ValueError("Parent key not found in the tree")
             self.now = child
-            if self.use_kv_cache and self.planner_model is not None and self.processor is not None:
-                self.get_node_group(self.planner_model,self.now)
-        if self.use_kv_cache and self.planner_model is not None and self.processor is not None:
-            self.compute_kv(self.now,[])
-
-    def get_group_kv(self,group,node,current_node):
-        group_kv = None
-        cpu_flag = 0
-        if node.group == group and node.key != current_node.key:
-            if node.key not in self.store_in_gpu:
-                self.load_kv_to_gpu(node)
-                cpu_flag = 1
-            group_kv = copy.deepcopy(node.describe_kv)
-            if cpu_flag == 1:
-                node.describe_kv = tuple((tensor[0].to('cpu'),tensor[1].to('cpu')) for i,tensor in enumerate(node.describe_kv))
-            
-        for child in node.children:
-            group_kv_child = self.get_group_kv(group,child,current_node)
-            if group_kv == None:
-                group_kv = group_kv_child
-            else:
-                if group_kv_child is not None:
-                    group_kv = tuple(tuple((torch.cat((t1[0], t2[0]), dim=2),torch.cat((t1[1], t2[1]), dim=2)))for t1, t2 in zip(group_kv,group_kv_child))
-        return group_kv
+            if self.use_kv_cache and self.kv_cache_supported and self.planner_model is not None and self.processor is not None:
+                try:
+                    self.get_node_group(self.planner_model,self.now)
+                except Exception as exc:
+                    self.disable_kv_cache(f"group assignment failed: {exc}")
+        if self.use_kv_cache and self.kv_cache_supported and self.planner_model is not None and self.processor is not None:
+            try:
+                self.compute_kv(self.now, list(range(len(self.now.describe))))
+            except Exception as exc:
+                self.disable_kv_cache(f"compute_kv failed: {exc}")
 
     def compute_kv(self,node,num_node):
         describe = ' '
         group_kv = None
-        if self.num_node > 1:
-            group_kv = self.get_group_kv(node.group,self.root,node)
-        for i in range(len(node.describe)):
-            if i not in num_node:
-                describe += node.describe[i]
-        conversation_kv = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"{describe}"},
-                    ],
-                },
-            ]
-        prompt_kv = self.processor.apply_chat_template(conversation_kv, add_generation_prompt=True)
-        inputs_kv = self.processor(prompt_kv, padding=True, return_tensors="pt").to("cuda:0")
-        # inputs_kv = processor(topomap.now.describe[i], padding=True, return_tensors="pt").to("cuda:0")
-        # if group_kv is not None:
-        #     import pdb;pdb.set_trace()
-        with torch.no_grad():
-            output_kv = self.planner_model(input_ids=inputs_kv['input_ids'],use_cache =True, past_key_values=group_kv)
-        node.describe_kv = tuple(tuple((tensor[0][:,:,-1*inputs_kv['input_ids'].shape[1]:],tensor[0][:,:,-1*inputs_kv['input_ids'].shape[1]:]))for tensor in output_kv.past_key_values)
+        if self.num_node > 1 and node.group is not None:
+            group_prefix_text = self._get_group_prefix_text(node.group, self.root, node)
+            if group_prefix_text:
+                group_kv = self._build_cache_from_text(group_prefix_text)
+        for i in num_node:
+            describe += node.describe[i]
+        node.describe_kv = self._build_cache_from_text(describe, past_key_values=group_kv)
+        node.describe_kv_signature = tuple(num_node)
         if self.device_map == None:
             self.device_map = [[tensor[0].device,tensor[1].device] for tensor in node.describe_kv]
         if node.key not in self.store_in_gpu:
@@ -241,8 +449,66 @@ class Navigation_map:
         for child in node.children:
             self.print_tree(child, level + 1)
 
+    def _get_consumed_description_indices(self, node, last_key, last_index):
+        consumed_indices = set()
+        if node.key in last_key:
+            for j in range(len(last_key)):
+                if node.key == last_key[j]:
+                    consumed_indices.add(last_index[j])
+        return consumed_indices
 
-    def create_describe(self,node,last_key,last_index,target_index):
+    def _extract_description_labels(self, raw_description):
+        try:
+            description_data = json.loads(raw_description)
+        except Exception:
+            return []
+
+        labels = []
+        for obj in description_data.get("Objects", []):
+            label = str(obj).strip().lower()
+            if label:
+                labels.append(label)
+        return labels
+
+    def _is_low_information_label(self, label, final_goal_label):
+        normalized_label = str(label).strip().lower()
+        normalized_goal = str(final_goal_label).strip().lower()
+        if normalized_label == normalized_goal:
+            return False
+        if normalized_label in frontier_memory_labels:
+            return False
+        if normalized_label in low_information_memory_labels:
+            return True
+        tokens = [token for token in re.split(r"[^a-z0-9]+", normalized_label) if token]
+        if any(token in {"door", "doorway", "window"} for token in tokens):
+            return False
+        if any(token in low_information_memory_labels for token in tokens):
+            non_structural_tokens = [token for token in tokens if token not in structural_phrase_tokens]
+            return len(non_structural_tokens) == 0
+        return False
+
+    def _is_productive_description(self, raw_description, final_goal_label):
+        labels = self._extract_description_labels(raw_description)
+        if not labels:
+            return True
+        for label in labels:
+            if not self._is_low_information_label(label, final_goal_label):
+                return True
+        return False
+
+    def _get_selected_description_indices(self, node, last_key, last_index, final_goal_label):
+        consumed_indices = self._get_consumed_description_indices(node, last_key, last_index)
+        active_indices = [i for i in range(len(node.describe)) if i not in consumed_indices]
+        productive_indices = [
+            i for i in active_indices
+            if self._is_productive_description(node.describe[i], final_goal_label)
+        ]
+        if productive_indices:
+            return productive_indices
+        return active_indices
+
+
+    def create_describe(self,node,last_key,last_index,target_index,final_goal_label):
         if use_pruning:
             selected = any(np.array([row[target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2) for row in node.similarity]) > self.similarity_threshould[target_index])  or any([any(np.array([row[target_index]-width_weight*math.sqrt((children.position[0]-self.now.position[0])**2+(children.position[2]-self.now.position[2])**2) for row in children.similarity]) > self.similarity_threshould[target_index] )for children in node.children])
             if node.parent != None:
@@ -252,106 +518,29 @@ class Navigation_map:
         describe = ' '
         if selected:
             describe = f'{node.key} : '
-            num_node = []
-            if node.key in last_key :
-                for j in range(0,len(last_key)):
-                    # num_node = last_key.index(node.key)
-                    if node.key == last_key[j]:
-                        num_node.append(last_index[j])
-            if len(num_node) < len(node.describe):
-                for i in range(len(node.describe)):
-                # if i!=last_index[num_node]:
-                    if i not in num_node:
-                        describe += node.describe[i]
+            selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
+            if selected_indices:
+                for i in selected_indices:
+                    describe += node.describe[i]
             else:
                 describe = ' '
         for child in node.children:
-            describe += self.create_describe(child,last_key,last_index,target_index)
+            describe += self.create_describe(child,last_key,last_index,target_index,final_goal_label)
             
         return describe
     
-    def get_similarity_threshould(self,node,last_key,last_index,target_index):
-        num_node = []
+    def get_similarity_threshould(self,node,last_key,last_index,target_index,final_goal_label):
         similarity_child=[]
         similarities = [0.0]
-        if node.key in last_key :
-            for j in range(0,len(last_key)):
-                if node.key == last_key[j]:
-                    num_node.append(last_index[j])
-        if len(num_node) < len(node.describe):
-            for i in range(len(node.describe)):
-                if i not in num_node:
-                    similarities.append(node.similarity[i][target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2))
+        selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
+        for i in selected_indices:
+            similarities.append(node.similarity[i][target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2))
         
         for child in node.children:
-            similarity_child = self.get_similarity_threshould(child,last_key,last_index,target_index)
+            similarity_child = self.get_similarity_threshould(child,last_key,last_index,target_index,final_goal_label)
         for similar in similarity_child:
             similarities.append(similar)
         return similarities
-
-
-    def create_describe_and_cache(self,model,node,last_key,last_index,target_index):
-        num_node = []
-        describe = ' '
-        describe_kv = None
-        if use_pruning:
-            ## if node has promising objects
-            selected = any(np.array([row[target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2) for row in node.similarity]) > self.similarity_threshould[target_index]) or node.group in self.used_groups
-            ## if child node has promising objects
-            selected = selected or any([any(np.array([row[target_index]-width_weight*math.sqrt((children.position[0]-self.now.position[0])**2+(children.position[2]-self.now.position[2])**2) for row in children.similarity]) > self.similarity_threshould[target_index] )for children in node.children])
-            if node.parent != None:
-                selected = selected or any(np.array([row[target_index]-width_weight*math.sqrt((node.parent.position[0]-self.now.position[0])**2+(node.parent.position[2]-self.now.position[2])**2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
-        else:
-            selected = True
-        if selected:
-            self.used_groups.append(node.group)
-            if node.state == 'recompute':
-                if node.key in last_key :
-                    for j in range(0,len(last_key)):
-                        if node.key == last_key[j]:
-                            num_node.append(last_index[j])
-                if len(num_node) >= len(node.describe):
-                    node.state = 'explored'
-                    if node.key in self.store_in_gpu:
-                        i = self.store_in_gpu.index(node.key)
-                        del self.store_in_gpu[i]
-                        del self.store_in_gpu_score[i]
-                else:
-                    node.state = 'explorable'
-                    if node.key not in self.store_in_gpu:
-                        self.store_in_gpu.append(node.key)
-                        self.store_in_gpu_score.append([max([node_similarities[target_index] for node_similarities in node.similarity]),node.position])
-                    self.compute_kv(node,num_node)
-            if node.state == 'explorable':
-                for i in range(len(node.describe)):
-                    if i not in num_node:
-                        describe += node.describe[i]
-                if node.key not in self.store_in_gpu:
-                    self.store_in_gpu.append(node.key)
-                    self.store_in_gpu_score.append([max([node_similarities[target_index] for node_similarities in node.similarity]),node.position])
-                    self.load_kv_to_gpu(node)
-                describe_kv = copy.deepcopy(node.describe_kv)
-                if len(self.store_in_gpu) > gpu_node_num:
-                    node_to_delete = sorted(range(len(self.store_in_gpu_score)), key=lambda x: self.store_in_gpu_score[x][0]- width_weight * math.sqrt((self.store_in_gpu_score[x][1][0]-self.now.position[0])**2+(self.store_in_gpu_score[x][1][2]-self.now.position[2])**2))[:(len(self.store_in_gpu) - gpu_node_num)]
-                    node_to_delete.sort(reverse=True)
-                    for i in node_to_delete:
-                        del self.store_in_gpu[i]
-                        del self.store_in_gpu_score[i]
-            else:
-                describe = ' '
-
-        for child in node.children:
-            describe_child, describe_kv_child= self.create_describe_and_cache(model,child,last_key,last_index,target_index)
-
-            describe += describe_child
-            if describe_kv == None:
-                describe_kv = describe_kv_child
-            else:
-                if describe_kv_child is not None:
-                    describe_kv = tuple(tuple((torch.cat((t1[0], t2[0]), dim=2),torch.cat((t1[1], t2[1]), dim=2)))for t1, t2 in zip(describe_kv,describe_kv_child))
-       
-        return describe,describe_kv
-
 
     def find_token_length(self,node,tokenizer):
         length = []
@@ -368,82 +557,47 @@ class Navigation_map:
     
 
     def get_node_group(self,model,node):
-        threshold = 0.99
-        describe,describe_kv,cache_length,cache_group = self.create_describe_and_cache_all(model,self.root)
-        for i in range(len(cache_length)-1):
-            cache_length[i+1] += cache_length[i]
-        describe_current = ' '
-        for i in range(len(node.describe)):
-            describe_current += node.describe[i]
-        conversation_kv = [
-            {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": f"{describe_current}"},
-                    ],
-                },
-            ]
-        prompt_kv = self.processor.apply_chat_template(conversation_kv, add_generation_prompt=True)
-
-        inputs_kv = self.processor(prompt_kv, padding=True, return_tensors="pt").to("cuda:0")
-        input_ids = inputs_kv['input_ids']
-        with torch.no_grad():
-            if not isinstance(describe_kv, Cache):  # kept for BC (non `Cache` `past_key_values` inputs)
-               describe_kv = DynamicCache.from_legacy_cache(describe_kv)
-            
-            hidden_states = model.language_model.model.embed_tokens(input_ids)  # 嵌入层
-            past_seen_tokens = describe_kv[0][0][0][0].shape[0] if describe_kv is not None else 0
-            cache_position = torch.arange(
-                past_seen_tokens, past_seen_tokens + hidden_states.shape[1], device=hidden_states.device
-            )
-            position_ids = cache_position.unsqueeze(0)
-            position_embeddings = model.language_model.model.rotary_emb(hidden_states, position_ids)
-            for i,layer in enumerate(model.language_model.model.layers):
-                outputs = layer(hidden_states, use_cache=True, past_key_value=describe_kv, output_attentions=True,cache_position=cache_position,position_ids=position_ids,position_embeddings=position_embeddings)
-                hidden_states = outputs[0]  
-                attention = outputs[1]  
-                attention_sum = np.zeros(len(set(cache_group)))
-                for j in range(len(cache_length)):
-                    if j==0:
-                        last_length = 0
-                    else:
-                        last_length = cache_length[j-1]
-                    attention_sum[cache_group[j]] += attention[0][:,-1,last_length:cache_length[j]].cpu().numpy().sum()/(1.0*(attention[0].shape[0])) ##?
-                index = np.argmax(attention_sum)
-                if attention_sum[index]>threshold:
-                    node.group = index
-                    break
-                if i > layer_threshold:
-                    node.group = len(set(cache_group))
-                    break
+        threshold = 0.30
+        group_texts = self._collect_group_texts(self.root, node)
+        if not group_texts:
+            node.group = 0
+            return
+        describe_current = self._node_description_text(node)
+        best_group = None
+        best_score = -1.0
+        for group_id, text_parts in group_texts.items():
+            group_text = self._normalize_similarity_text(" ".join(text_parts))
+            score = self._similarity_score(describe_current, group_text)
+            if score > best_score:
+                best_score = score
+                best_group = group_id
+        if best_group is not None and best_score >= threshold:
+            node.group = best_group
+        else:
+            node.group = (max(group_texts.keys()) + 1) if group_texts else 0
 
     
-    def create_describe_and_cache_all(self,model,node):
-        describe = ' '
-        describe_kv = None
-        cache_length = []
-        cache_group = []
-        cpu_flag = 0
-        if node.group != None:
-            for i in range(len(node.describe)):
-                describe += node.describe[i]
-            cache_length.append(node.describe_kv[0][0].shape[2])
-            cache_group.append(node.group)
-            if node.key not in self.store_in_gpu:
-                self.load_kv_to_gpu(node)
-                cpu_flag = 1
-            describe_kv = node.describe_kv[:layer_threshold]
-            if cpu_flag == 1:
-                node.describe_kv = tuple((tensor[0].to('cpu'),tensor[1].to('cpu')) for i,tensor in enumerate(node.describe_kv))
+    def _create_describe_for_cache(self,node,last_key,last_index,target_index,final_goal_label):
+        if use_pruning:
+            selected = any(np.array([row[target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2) for row in node.similarity]) > self.similarity_threshould[target_index]) or node.group in self.used_groups
+            selected = selected or any([any(np.array([row[target_index]-width_weight*math.sqrt((children.position[0]-self.now.position[0])**2+(children.position[2]-self.now.position[2])**2) for row in children.similarity]) > self.similarity_threshould[target_index] )for children in node.children])
+            if node.parent != None:
+                selected = selected or any(np.array([row[target_index]-width_weight*math.sqrt((node.parent.position[0]-self.now.position[0])**2+(node.parent.position[2]-self.now.position[2])**2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
+        else:
+            selected = True
 
+        describe = ' '
+        if selected:
+            selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
+            if selected_indices:
+                self.used_groups.append(node.group)
+                for i in selected_indices:
+                    describe += node.describe[i]
         for child in node.children:
-            describe_child, describe_kv_child,cache_length_child,cache_group_child= self.create_describe_and_cache_all(model,child)
-            describe += describe_child
-            cache_length.extend(cache_length_child)
-            cache_group.extend(cache_group_child)
-            if describe_kv == None:
-                describe_kv = describe_kv_child
-            else:
-                if describe_kv_child is not None:
-                    describe_kv = tuple(tuple((torch.cat((t1[0], t2[0]), dim=2),torch.cat((t1[1], t2[1]), dim=2)))for t1, t2 in zip(describe_kv,describe_kv_child))
-        return describe,describe_kv,cache_length,cache_group
+            describe += self._create_describe_for_cache(child,last_key,last_index,target_index,final_goal_label)
+        return describe
+
+    def create_describe_and_cache(self,model,node,last_key,last_index,target_index,final_goal_label):
+        describe = self._create_describe_for_cache(node,last_key,last_index,target_index,final_goal_label)
+        describe_kv = self._build_cache_from_text(describe) if describe.strip() else None
+        return describe,describe_kv
