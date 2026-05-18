@@ -20,8 +20,9 @@ structural_phrase_tokens = {
     "tiled", "pattern"
 }
 
+
 class TreeNode:
-    def __init__(self, key: str, position: List[float], direction: float, waypoint = None, distance_to_parent: float = 0.0, parent: Optional['TreeNode'] = None, picture = None, describe = None):
+    def __init__(self, key: str, position: List[float], direction: float, waypoint=None, distance_to_parent: float = 0.0, parent: Optional['TreeNode'] = None, picture=None, describe=None):
         self.key = key
         self.position = position
         self.direction = direction
@@ -64,17 +65,17 @@ class TreeNode:
         )
         node.children = [TreeNode.from_dict(child, node) for child in data['children']]
         return node
-    
+
     def find_connections(self):
         connection_map = ' '
         if not self.children:
             return connection_map
-        else:
-            for i in range(len(self.children)):
-                connection_map += f'{self.key} is connected to {self.children[i].key}. '
-            for i in range(len(self.children)):
-                connection_map += self.children[i].find_connections()
-            return connection_map
+        for child in self.children:
+            connection_map += f'{self.key} is connected to {child.key}. '
+        for child in self.children:
+            connection_map += child.find_connections()
+        return connection_map
+
 
 class Navigation_map:
     def __init__(self, root: Optional[TreeNode] = None):
@@ -262,26 +263,32 @@ class Navigation_map:
         normalized_text = self._normalize_similarity_text(describe_text)
         if not normalized_text:
             return None
-        conversation_kv = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": normalized_text},
-                ],
-            }
-        ]
-        prompt_kv = self.processor.apply_chat_template(
-            conversation_kv,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-        inputs_kv = self.processor(prompt_kv, padding=True, return_tensors="pt").to("cuda:0")
+        if hasattr(self.processor, "apply_chat_template"):
+            conversation_kv = [{"role": "user", "content": normalized_text}]
+            try:
+                prompt_kv = self.processor.apply_chat_template(
+                    conversation_kv,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            except Exception:
+                prompt_kv = normalized_text
+        else:
+            prompt_kv = normalized_text
+        text_model = getattr(self.planner_model, "language_model", self.planner_model)
+        model_device = next(text_model.parameters()).device
+        inputs_kv = self.processor(prompt_kv, padding=True, return_tensors="pt").to(model_device)
         runtime_cache = self._legacy_to_dynamic_cache(past_key_values)
         with torch.no_grad():
-            output_kv = self.planner_model(
-                input_ids=inputs_kv["input_ids"],
-                use_cache=True,
-                past_key_values=runtime_cache,
+            forward_kwargs = {
+                "input_ids": inputs_kv["input_ids"],
+                "use_cache": True,
+                "past_key_values": runtime_cache,
+            }
+            if runtime_cache is None:
+                forward_kwargs["attention_mask"] = inputs_kv.get("attention_mask")
+            output_kv = text_model(
+                **forward_kwargs,
             )
         return self._extract_legacy_kv_cache(
             output_kv.past_key_values,
@@ -289,6 +296,16 @@ class Navigation_map:
         )
 
     def _extract_legacy_kv_cache(self, past_key_values, seq_len: int):
+        if hasattr(past_key_values, "to_legacy_cache"):
+            past_key_values = past_key_values.to_legacy_cache()
+        if isinstance(past_key_values, tuple):
+            return tuple(
+                (
+                    key_tensor[:, :, -seq_len:, :].detach(),
+                    value_tensor[:, :, -seq_len:, :].detach(),
+                )
+                for key_tensor, value_tensor in past_key_values
+            )
         legacy_cache = []
         for layer in getattr(past_key_values, "layers", []):
             if hasattr(layer, "keys") and hasattr(layer, "values"):
@@ -323,32 +340,33 @@ class Navigation_map:
             cache.update(key_states, value_states, layer_idx)
         return cache
 
-    def add_node(self, parent_key: str, key: str, position: List[float], direction: float, waypoint, distance_to_parent: float,picture,describe):
+    def add_node(self, parent_key: str, key: str, position: List[float], direction: float, waypoint, distance_to_parent: float, picture, describe):
         if not self.root:
-            self.root = TreeNode(key, position, direction, waypoint, distance_to_parent,None,picture,describe)
+            self.root = TreeNode(key, position, direction, waypoint, distance_to_parent, None, picture, describe)
             self.now = self.root
             self.now.group = 0
         else:
             parent_node = self.now
-            # parent_node = self.find_node(self.root, parent_key)
             if parent_node:
-                child = TreeNode(key, position, direction, waypoint, distance_to_parent, parent_node,picture,describe)
+                child = TreeNode(key, position, direction, waypoint, distance_to_parent, parent_node, picture, describe)
                 parent_node.add_child(child)
             else:
                 raise ValueError("Parent key not found in the tree")
             self.now = child
-            if self.use_kv_cache and self.kv_cache_supported and self.planner_model is not None and self.processor is not None:
-                try:
-                    self.get_node_group(self.planner_model,self.now)
-                except Exception as exc:
+            try:
+                self.get_node_group(self.planner_model, self.now)
+            except Exception as exc:
+                if self.use_kv_cache and self.kv_cache_supported:
                     self.disable_kv_cache(f"group assignment failed: {exc}")
+                else:
+                    self.now.group = self.num_node
         if self.use_kv_cache and self.kv_cache_supported and self.planner_model is not None and self.processor is not None:
             try:
                 self.compute_kv(self.now, list(range(len(self.now.describe))))
             except Exception as exc:
                 self.disable_kv_cache(f"compute_kv failed: {exc}")
 
-    def compute_kv(self,node,num_node):
+    def compute_kv(self, node, num_node):
         describe = ' '
         group_kv = None
         if self.num_node > 1 and node.group is not None:
@@ -359,14 +377,13 @@ class Navigation_map:
             describe += node.describe[i]
         node.describe_kv = self._build_cache_from_text(describe, past_key_values=group_kv)
         node.describe_kv_signature = tuple(num_node)
-        if self.device_map == None:
-            self.device_map = [[tensor[0].device,tensor[1].device] for tensor in node.describe_kv]
-        if node.key not in self.store_in_gpu:
-            node.describe_kv = tuple((tensor[0].to('cpu'),tensor[1].to('cpu')) for tensor in node.describe_kv)
-        # import pdb;pdb.set_trace()
-    
-    def load_kv_to_gpu(self,node):
-        node.describe_kv = tuple((tensor[0].to(self.device_map[i][0]),tensor[1].to(self.device_map[i][1])) for i,tensor in enumerate(node.describe_kv))
+        if self.device_map is None and node.describe_kv is not None:
+            self.device_map = [[tensor[0].device, tensor[1].device] for tensor in node.describe_kv]
+        if node.key not in self.store_in_gpu and node.describe_kv is not None:
+            node.describe_kv = tuple((tensor[0].to('cpu'), tensor[1].to('cpu')) for tensor in node.describe_kv)
+
+    def load_kv_to_gpu(self, node):
+        node.describe_kv = tuple((tensor[0].to(self.device_map[i][0]), tensor[1].to(self.device_map[i][1])) for i, tensor in enumerate(node.describe_kv))
 
     def find_node(self, node: TreeNode, key: str) -> Optional[TreeNode]:
         if node.key == key:
@@ -376,57 +393,49 @@ class Navigation_map:
             if found_node:
                 return found_node
         return None
-    
+
     def find_nearest_node(self, node: TreeNode, position) -> Optional[TreeNode]:
         nearest_length = 1000
         nearest_position = None
         nearest_node = None
         for child in node.children:
-            length,nearest_position_child,child_node = self.find_nearest_node(child, position)
+            length, nearest_position_child, child_node = self.find_nearest_node(child, position)
             if length < nearest_length:
                 nearest_length = length
                 nearest_position = nearest_position_child
                 nearest_node = child_node
-        length = math.sqrt((position[0]-node.position[0])**2+(position[1]-node.position[1])**2+(position[2]-node.position[2])**2)
+        length = math.sqrt((position[0] - node.position[0]) ** 2 + (position[1] - node.position[1]) ** 2 + (position[2] - node.position[2]) ** 2)
         if length < nearest_length:
             nearest_length = length
             nearest_position = node.position
             nearest_node = node
-        return nearest_length,nearest_position,nearest_node
+        return nearest_length, nearest_position, nearest_node
 
     def get_path(self, start_key: str, end_key: str) -> List[Tuple[str, Tuple[float, float]]]:
         start_node = self.find_node(self.root, start_key)
         end_node = self.find_node(self.root, end_key)
         if not start_node or not end_node:
             raise ValueError("One or both keys not found in the tree")
-        
-        # Get path from start_node to root
+
         path_to_root_from_start = []
         node = start_node
         while node:
             path_to_root_from_start.append(node)
             node = node.parent
         path_to_root_from_start.reverse()
-        
-        # Get path from end_node to root
+
         path_to_root_from_end = []
         node = end_node
         while node:
             path_to_root_from_end.append(node)
             node = node.parent
 
-        # Find common ancestor
         i = 0
-        while (i < len(path_to_root_from_start) and i < len(path_to_root_from_end) and
-               path_to_root_from_start[i] == path_to_root_from_end[i]):
+        while (i < len(path_to_root_from_start) and i < len(path_to_root_from_end) and path_to_root_from_start[i] == path_to_root_from_end[i]):
             i += 1
 
         common_ancestor_index = i - 1
-
-        # Path from start to common ancestor
         path = path_to_root_from_start[:common_ancestor_index + 1]
-
-        # Path from common ancestor to end (in reverse)
         path.extend(reversed(path_to_root_from_end[common_ancestor_index + 1:]))
 
         return [(node.key, node.position) for node in path]
@@ -507,12 +516,11 @@ class Navigation_map:
             return productive_indices
         return active_indices
 
-
-    def create_describe(self,node,last_key,last_index,target_index,final_goal_label):
+    def create_describe(self, node, last_key, last_index, target_index, final_goal_label):
         if use_pruning:
-            selected = any(np.array([row[target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2) for row in node.similarity]) > self.similarity_threshould[target_index])  or any([any(np.array([row[target_index]-width_weight*math.sqrt((children.position[0]-self.now.position[0])**2+(children.position[2]-self.now.position[2])**2) for row in children.similarity]) > self.similarity_threshould[target_index] )for children in node.children])
-            if node.parent != None:
-                selected = selected or any(np.array([row[target_index]-width_weight*math.sqrt((node.parent.position[0]-self.now.position[0])**2+(node.parent.position[2]-self.now.position[2])**2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
+            selected = any(np.array([row[target_index] - width_weight * math.sqrt((node.position[0] - self.now.position[0]) ** 2 + (node.position[2] - self.now.position[2]) ** 2) for row in node.similarity]) > self.similarity_threshould[target_index]) or any([any(np.array([row[target_index] - width_weight * math.sqrt((children.position[0] - self.now.position[0]) ** 2 + (children.position[2] - self.now.position[2]) ** 2) for row in children.similarity]) > self.similarity_threshould[target_index]) for children in node.children])
+            if node.parent is not None:
+                selected = selected or any(np.array([row[target_index] - width_weight * math.sqrt((node.parent.position[0] - self.now.position[0]) ** 2 + (node.parent.position[2] - self.now.position[2]) ** 2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
         else:
             selected = True
         describe = ' '
@@ -525,38 +533,38 @@ class Navigation_map:
             else:
                 describe = ' '
         for child in node.children:
-            describe += self.create_describe(child,last_key,last_index,target_index,final_goal_label)
-            
+            describe += self.create_describe(child, last_key, last_index, target_index, final_goal_label)
+
         return describe
-    
-    def get_similarity_threshould(self,node,last_key,last_index,target_index,final_goal_label):
-        similarity_child=[]
+
+    def get_similarity_threshould(self, node, last_key, last_index, target_index, final_goal_label):
+        similarity_child = []
         similarities = [0.0]
         selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
         for i in selected_indices:
-            similarities.append(node.similarity[i][target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2))
-        
+            similarities.append(node.similarity[i][target_index] - width_weight * math.sqrt((node.position[0] - self.now.position[0]) ** 2 + (node.position[2] - self.now.position[2]) ** 2))
+
         for child in node.children:
-            similarity_child = self.get_similarity_threshould(child,last_key,last_index,target_index,final_goal_label)
+            similarity_child = self.get_similarity_threshould(child, last_key, last_index, target_index, final_goal_label)
         for similar in similarity_child:
             similarities.append(similar)
         return similarities
 
-    def find_token_length(self,node,tokenizer):
+    def find_token_length(self, node, tokenizer):
         length = []
         prompt = ' '
         for i in range(len(node.describe)):
             prompt += node.describe[i]
         prompt_token = tokenizer(prompt)
         length.append(len(prompt_token['input_ids']))
-        for i in range(len(node.children)):
-            length_child = self.find_token_length(node.children[i],tokenizer)
-            for i in range(len(length_child)):
+        for child in node.children:
+            length_child = self.find_token_length(child, tokenizer)
+            for _ in range(len(length_child)):
                 length.append(length_child[0])
         return length
-    
 
-    def get_node_group(self,model,node):
+    def get_node_group(self, model, node):
+        del model
         threshold = 0.30
         group_texts = self._collect_group_texts(self.root, node)
         if not group_texts:
@@ -576,13 +584,12 @@ class Navigation_map:
         else:
             node.group = (max(group_texts.keys()) + 1) if group_texts else 0
 
-    
-    def _create_describe_for_cache(self,node,last_key,last_index,target_index,final_goal_label):
+    def _create_describe_for_cache(self, node, last_key, last_index, target_index, final_goal_label):
         if use_pruning:
-            selected = any(np.array([row[target_index]-width_weight*math.sqrt((node.position[0]-self.now.position[0])**2+(node.position[2]-self.now.position[2])**2) for row in node.similarity]) > self.similarity_threshould[target_index]) or node.group in self.used_groups
-            selected = selected or any([any(np.array([row[target_index]-width_weight*math.sqrt((children.position[0]-self.now.position[0])**2+(children.position[2]-self.now.position[2])**2) for row in children.similarity]) > self.similarity_threshould[target_index] )for children in node.children])
-            if node.parent != None:
-                selected = selected or any(np.array([row[target_index]-width_weight*math.sqrt((node.parent.position[0]-self.now.position[0])**2+(node.parent.position[2]-self.now.position[2])**2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
+            selected = any(np.array([row[target_index] - width_weight * math.sqrt((node.position[0] - self.now.position[0]) ** 2 + (node.position[2] - self.now.position[2]) ** 2) for row in node.similarity]) > self.similarity_threshould[target_index]) or node.group in self.used_groups
+            selected = selected or any([any(np.array([row[target_index] - width_weight * math.sqrt((children.position[0] - self.now.position[0]) ** 2 + (children.position[2] - self.now.position[2]) ** 2) for row in children.similarity]) > self.similarity_threshould[target_index]) for children in node.children])
+            if node.parent is not None:
+                selected = selected or any(np.array([row[target_index] - width_weight * math.sqrt((node.parent.position[0] - self.now.position[0]) ** 2 + (node.parent.position[2] - self.now.position[2]) ** 2) for row in node.parent.similarity]) > self.similarity_threshould[target_index])
         else:
             selected = True
 
@@ -594,10 +601,11 @@ class Navigation_map:
                 for i in selected_indices:
                     describe += node.describe[i]
         for child in node.children:
-            describe += self._create_describe_for_cache(child,last_key,last_index,target_index,final_goal_label)
+            describe += self._create_describe_for_cache(child, last_key, last_index, target_index, final_goal_label)
         return describe
 
-    def create_describe_and_cache(self,model,node,last_key,last_index,target_index,final_goal_label):
-        describe = self._create_describe_for_cache(node,last_key,last_index,target_index,final_goal_label)
+    def create_describe_and_cache(self, model, node, last_key, last_index, target_index, final_goal_label):
+        del model
+        describe = self._create_describe_for_cache(node, last_key, last_index, target_index, final_goal_label)
         describe_kv = self._build_cache_from_text(describe) if describe.strip() else None
-        return describe,describe_kv
+        return describe, describe_kv
