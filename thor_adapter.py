@@ -22,7 +22,6 @@ def load_procthor_houses(seed=7, split="train", shuffle=True):
             for value in dataset.values():
                 houses.extend(list(value))
         except AttributeError:
-            # TODO: handle future PRIOR dataset container changes more explicitly.
             for split_name in ("train", "val", "test"):
                 try:
                     houses.extend(list(dataset[split_name]))
