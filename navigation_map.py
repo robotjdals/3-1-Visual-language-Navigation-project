@@ -8,6 +8,22 @@ import math
 import gc
 import copy
 from transformers.cache_utils import Cache, DynamicCache
+try:
+    from h2o_cache import (
+        apply_h2o_to_legacy_cache,
+        build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        h2o_enabled,
+        merge_heavy_scores,
+    )
+except ImportError:
+    from .h2o_cache import (
+        apply_h2o_to_legacy_cache,
+        build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        h2o_enabled,
+        merge_heavy_scores,
+    )
 
 width_weight = 0.001
 gpu_node_num = 20
@@ -85,6 +101,7 @@ class Navigation_map:
         self.semantic_max_length = None
         self.processor = None
         self.use_kv_cache = False
+        self.h2o_goal_label = None
         self.root = root
         self.now = root
         self.current_inference = 0
@@ -259,7 +276,7 @@ class Navigation_map:
                 prefix_parts.append(child_prefix)
         return " ".join(part for part in prefix_parts if part)
 
-    def _build_cache_from_text(self, describe_text, past_key_values=None):
+    def _build_cache_from_text(self, describe_text, past_key_values=None, h2o_goal_label=None, h2o_label="prefill"):
         normalized_text = self._normalize_similarity_text(describe_text)
         if not normalized_text:
             return None
@@ -284,16 +301,42 @@ class Navigation_map:
                 "input_ids": inputs_kv["input_ids"],
                 "use_cache": True,
                 "past_key_values": runtime_cache,
+                "output_attentions": h2o_enabled(),
             }
             if runtime_cache is None:
                 forward_kwargs["attention_mask"] = inputs_kv.get("attention_mask")
             output_kv = text_model(
                 **forward_kwargs,
             )
-        return self._extract_legacy_kv_cache(
+        legacy_cache = self._extract_legacy_kv_cache(
             output_kv.past_key_values,
             inputs_kv["input_ids"].shape[1],
         )
+        if h2o_enabled():
+            attention_scores = build_attention_heavy_scores(getattr(output_kv, "attentions", None))
+            goal_scores = build_goal_heavy_scores(
+                self.processor,
+                inputs_kv["input_ids"][0],
+                h2o_goal_label or self.h2o_goal_label,
+            )
+            heavy_scores = merge_heavy_scores(attention_scores, goal_scores)
+            legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
+                legacy_cache,
+                heavy_scores=heavy_scores,
+                label=h2o_label,
+            )
+            if h2o_stats.get("applied"):
+                print(
+                    "[Debug] H2O cache eviction: "
+                    f"label={h2o_stats.get('label')} "
+                    f"seq_before={h2o_stats.get('seq_before')} "
+                    f"seq_after={h2o_stats.get('seq_after')} "
+                    f"kept_recent={h2o_stats.get('kept_recent')} "
+                    f"kept_heavy={h2o_stats.get('kept_heavy')} "
+                    f"protected_prefix={h2o_stats.get('protected_prefix')} "
+                    f"budget={h2o_stats.get('budget')}"
+                )
+        return legacy_cache
 
     def _extract_legacy_kv_cache(self, past_key_values, seq_len: int):
         if hasattr(past_key_values, "to_legacy_cache"):
@@ -606,6 +649,15 @@ class Navigation_map:
 
     def create_describe_and_cache(self, model, node, last_key, last_index, target_index, final_goal_label):
         del model
+        self.h2o_goal_label = final_goal_label
         describe = self._create_describe_for_cache(node, last_key, last_index, target_index, final_goal_label)
-        describe_kv = self._build_cache_from_text(describe) if describe.strip() else None
+        describe_kv = (
+            self._build_cache_from_text(
+                describe,
+                h2o_goal_label=final_goal_label,
+                h2o_label="describe",
+            )
+            if describe.strip()
+            else None
+        )
         return describe, describe_kv
