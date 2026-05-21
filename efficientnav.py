@@ -46,6 +46,24 @@ from torchvision.transforms.functional import InterpolationMode
 import datetime
 current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 from navigation_map import Navigation_map
+try:
+    from h2o_cache import (
+        apply_h2o_to_legacy_cache,
+        build_attention_heavy_scores,
+        h2o_config,
+        h2o_enabled,
+        merge_heavy_scores,
+        trim_heavy_scores,
+    )
+except ImportError:
+    from .h2o_cache import (
+        apply_h2o_to_legacy_cache,
+        build_attention_heavy_scores,
+        h2o_config,
+        h2o_enabled,
+        merge_heavy_scores,
+        trim_heavy_scores,
+    )
 import units
 from units import load_image,load_model,get_grounding_output,plot_boxes_to_image,last_non_space_char,make_cfg
 from thor_adapter import ThorAgentState, ThorShortestPath, ThorSim, canonical_goal_name, load_procthor_houses, vector_to_yaw, yaw_to_vector
@@ -83,6 +101,15 @@ planner_model_path = os.environ.get(
     os.environ.get("EFFICIENTNAV_QWEN_PATH", "/home/min/models/Qwen3.5-0.8B"),
 )
 print(f"[EfficientNav] planner model: {planner_model_path}")
+h2o_budget, h2o_recent_size, h2o_heavy_size, h2o_protected_prefix = h2o_config()
+print(
+    "[EfficientNav] H2O cache: "
+    f"enabled={h2o_enabled()} "
+    f"budget={h2o_budget} "
+    f"recent={h2o_recent_size} "
+    f"heavy={h2o_heavy_size} "
+    f"protected_prefix={h2o_protected_prefix}"
+)
 internvl_mode = "internvl" in planner_model_path.lower()
 planner_processor = None
 if not internvl_mode:
@@ -178,9 +205,13 @@ early_stop  = True #
 directly_find =True ##
 use_kv_cache = os.environ.get("EFFICIENTNAV_USE_KV_CACHE", "1") == "1"
 use_pruning = True
+only_llm_baseline = os.environ.get("EFFICIENTNAV_ONLY_LLM_BASELINE", "0") == "1"
+approach_visible_goal_with_gt = os.environ.get(
+    "EFFICIENTNAV_APPROACH_VISIBLE_GOAL_WITH_GT", "1"
+) == "1"
 
-num_episode = 20
-num_environment = 15
+num_episode = int(os.environ.get("EFFICIENTNAV_NUM_HOUSES", "20"))
+num_environment = int(os.environ.get("EFFICIENTNAV_NUM_ENVIRONMENTS", "1"))
 use_door_as_trajectory = False
 final_goal_list = ['toilet','tv','chair','sofa','bed','plant']
 trusted_planner_labels = {
@@ -191,6 +222,12 @@ trusted_planner_labels = {
 }
 low_value_planner_labels = {'wall', 'floor', 'ceiling', 'tile', 'tiles', 'shadow', 'shadows'}
 transition_planner_labels = {'doorway', 'door frame', 'door'}
+semantic_anchor_labels = {
+    'table', 'diningtable', 'sidetable', 'desk', 'countertop', 'bed', 'sofa',
+    'chair', 'cabinet', 'shelf', 'mirror', 'sink', 'toilet', 'fridge',
+    'refrigerator', 'lamp', 'desklamp', 'floorlamp', 'plant', 'painting',
+    'picture', 'picture frame', 'window', 'box'
+}
 observation_noise_labels = {'shadow', 'shadows', 'background'}
 structural_subgoal_tokens = {
     'a', 'an', 'the', 'of', 'with', 'wall', 'walls', 'floor', 'floors',
@@ -272,6 +309,24 @@ def is_semantically_reasonable_planner_label(label, final_goal=None):
     return True
 
 
+def planner_label_match(observed_label, candidate_label):
+    observed = canonical_goal_name(str(observed_label or "").strip().lower())
+    candidate = canonical_goal_name(str(candidate_label or "").strip().lower())
+    if observed == candidate:
+        return True
+    alias_groups = [
+        {"table", "diningtable", "sidetable", "desk", "countertop"},
+        {"lamp", "desklamp", "floorlamp"},
+        {"picture", "picture frame", "painting"},
+        {"remote", "remotecontrol"},
+        {"door", "doorway", "door frame", "doorframe"},
+        {"tv", "television", "tvstand"},
+        {"plant", "houseplant", "potted plant"},
+        {"fridge", "refrigerator"},
+    ]
+    return any(observed in group and candidate in group for group in alias_groups)
+
+
 def order_detection_prompt_labels(labels, final_goal=None, limit=4):
     normalized_labels = []
     seen = set()
@@ -338,8 +393,9 @@ def choose_goal_name_for_house(scene):
             return ensure_goal_name_registered(normalized_requested_goal)
         print(
             f"[Debug] requested EFFICIENTNAV_TARGET_OBJECT={requested_goal_name!r} "
-            f"not found in current house; falling back to interactive selection"
+            f"not found in current house; skipping house"
         )
+        return None
 
     print("\nSelectable target objects in this house:")
     for idx, goal_name in enumerate(selectable_goal_names, start=1):
@@ -791,6 +847,125 @@ def parse_planner_response(raw_text, allowed_objects_by_place, final_goal):
     return None
 
 
+def parse_planner_response_strict(raw_text):
+    raw_text = str(raw_text or "").strip()
+    start = raw_text.find("{")
+    end = raw_text.rfind("}") + 1
+    if start == -1 or end <= start:
+        return None
+    try:
+        parsed = json.loads(raw_text[start:end])
+        place = int(parsed.get("Place"))
+        angle = int(parsed.get("Angle", 0))
+        objects = parsed.get("Objects", [])
+    except Exception:
+        return None
+
+    if isinstance(objects, str):
+        objects = [objects]
+    if not isinstance(objects, list):
+        return None
+    cleaned_objects = [
+        canonical_goal_name(str(obj).strip().lower())
+        for obj in objects
+        if str(obj).strip()
+    ]
+    if not cleaned_objects:
+        return None
+    return {"Place": place, "Angle": angle, "Objects": [cleaned_objects[0]]}
+
+
+def parse_planner_response_minimal(raw_text):
+    raw_text = str(raw_text or "").strip()
+    start = raw_text.find("{")
+    end = raw_text.rfind("}") + 1
+    if start == -1 or end <= start:
+        return None
+    try:
+        parsed = json.loads(raw_text[start:end])
+    except Exception:
+        return None
+
+    raw_place = parsed.get("Place")
+    try:
+        place = int(raw_place)
+        raw_place_label = None
+    except Exception:
+        place = None
+        raw_place_label = canonical_goal_name(str(raw_place).strip().lower()) if raw_place is not None else None
+
+    try:
+        angle = int(parsed.get("Angle", 0))
+    except Exception:
+        angle = 0
+
+    objects = parsed.get("Objects", [])
+    if isinstance(objects, str):
+        objects = [objects]
+    if not isinstance(objects, list):
+        objects = []
+
+    cleaned_objects = [
+        canonical_goal_name(str(obj).strip().lower())
+        for obj in objects
+        if str(obj).strip()
+    ]
+    if raw_place_label:
+        cleaned_objects = [raw_place_label] + cleaned_objects
+
+    if not cleaned_objects:
+        return None
+    return {"Place": place, "Angle": angle, "Objects": cleaned_objects}
+
+
+def resolve_minimal_llm_choice(planner_choice, allowed_targets_by_place):
+    if planner_choice is None:
+        return None
+
+    raw_objects = planner_choice.get("Objects", [])
+    if isinstance(raw_objects, str):
+        raw_objects = [raw_objects]
+    requested_labels = [
+        canonical_goal_name(str(obj).strip().lower())
+        for obj in raw_objects
+        if str(obj).strip()
+    ]
+    if not requested_labels:
+        return None
+
+    try:
+        requested_place = int(planner_choice.get("Place"))
+    except Exception:
+        requested_place = None
+
+    try:
+        requested_angle = int(planner_choice.get("Angle", 0))
+    except Exception:
+        requested_angle = 0
+
+    if requested_place is not None:
+        place_targets = allowed_targets_by_place.get(requested_place, [])
+        for label in requested_labels:
+            for candidate in place_targets:
+                if canonical_goal_name(candidate[0]) == label and int(candidate[1]) == requested_angle:
+                    return {"Place": requested_place, "Angle": int(candidate[1]), "Objects": [label]}
+            for candidate in place_targets:
+                if canonical_goal_name(candidate[0]) == label:
+                    return {"Place": requested_place, "Angle": int(candidate[1]), "Objects": [label]}
+
+    for label in requested_labels:
+        for place_idx, place_targets in allowed_targets_by_place.items():
+            for candidate in place_targets:
+                if canonical_goal_name(candidate[0]) == label and int(candidate[1]) == requested_angle:
+                    return {"Place": int(place_idx), "Angle": int(candidate[1]), "Objects": [label]}
+        for place_idx, place_targets in allowed_targets_by_place.items():
+            for candidate in place_targets:
+                if canonical_goal_name(candidate[0]) == label:
+                    return {"Place": int(place_idx), "Angle": int(candidate[1]), "Objects": [label]}
+
+    return None
+
+
 def save_goal_bbox_debug(color_image, semantic_frame, object_id, label, output_path):
     mask = semantic_frame == object_id
     if not np.any(mask):
@@ -897,6 +1072,14 @@ def convert_legacy_kv_to_runtime_cache(cache_value):
         key_states, value_states = layer_cache
         runtime_cache.update(key_states, value_states, layer_idx)
     return runtime_cache
+
+
+def convert_runtime_kv_to_legacy_cache(cache_value):
+    if cache_value is None or isinstance(cache_value, tuple):
+        return cache_value
+    if hasattr(cache_value, "to_legacy_cache"):
+        return cache_value.to_legacy_cache()
+    return cache_value
 
 
 def get_observation(images,depth):
@@ -1071,6 +1254,9 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
     goal_candidate_box_match_ratio_threshold = float(
         os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_BOX_MATCH_RATIO_THRESHOLD", "0.01")
     )
+    goal_candidate_detection_min_side_px = int(
+        os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_DETECTION_MIN_SIDE_PX", "3")
+    )
     current_position = np.array(topomap.now.position if topomap.now is not None else [0.0, 0.0, 0.0])
     empty_position = []
     for i,(angle_picture, box_info_list) in enumerate(zip(position_looked,box_info_list_sum)):
@@ -1082,6 +1268,8 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
             if label in observation_noise_labels:
                 continue
             x1, y1, x2, y2 = box_info['box']
+            detected_box_width = max(0, int(x2) - int(x1))
+            detected_box_height = max(0, int(y2) - int(y1))
             semantic_box = semantic[y1:y2, x1:x2]
             unique_labels = np.unique(semantic_box)
             filtered_objects = []
@@ -1127,7 +1315,16 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
                     visible_threshold,
                     min_bbox_side_px,
                 )
-                if not is_clearly_visible or box_match_ratio < box_match_threshold:
+                goal_box_overlap_visible = (
+                    is_goal_candidate
+                    and box_match_ratio >= box_match_threshold
+                    and detected_box_width >= goal_candidate_detection_min_side_px
+                    and detected_box_height >= goal_candidate_detection_min_side_px
+                )
+                if (
+                    box_match_ratio < box_match_threshold
+                    or (not is_clearly_visible and not goal_box_overlap_visible)
+                ):
                     continue
                 if category_name in observation_noise_labels:
                     continue
@@ -1136,7 +1333,8 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
                     print(
                         f"[Debug] preserving goal candidate: label={label} angle={angle_picture} "
                         f"obj_id={int(label_id)} visible_ratio={visible_ratio:.6f} "
-                        f"bbox={bbox_width}x{bbox_height} box_match={box_match_ratio:.4f}"
+                        f"bbox={bbox_width}x{bbox_height} box_match={box_match_ratio:.4f} "
+                        f"detection_bbox={detected_box_width}x{detected_box_height}"
                     )
                 object_info_filtered = ObjectInfo(
                     label=label,
@@ -1291,6 +1489,8 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
         prompt_pruning = build_chat_prompt(input_text)
         new_input_pruning = planner_tokenizer(prompt_pruning, padding=True, return_tensors="pt").to(device0)
         generated_tokens = []
+        h2o_decode_step = 0
+        h2o_heavy_scores = None
         eos_token_ids = {
             token_id for token_id in [
                 planner_tokenizer.eos_token_id,
@@ -1305,6 +1505,7 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                     input_ids=new_input_pruning['input_ids'],
                     past_key_values=place_describe_cache,
                     use_cache=True,
+                    output_attentions=h2o_enabled(),
                 )
             next_token = outputs.logits.argmax(dim=-1)[:, -1:]
             next_token_id = int(next_token[0][0])
@@ -1312,6 +1513,33 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                 break
             generated_tokens.append(next_token_id)
             place_describe_cache = outputs.past_key_values
+            if h2o_enabled():
+                try:
+                    attention_scores = build_attention_heavy_scores(getattr(outputs, "attentions", None))
+                    h2o_heavy_scores = merge_heavy_scores(h2o_heavy_scores, attention_scores)
+                    legacy_cache = convert_runtime_kv_to_legacy_cache(place_describe_cache)
+                    legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
+                        legacy_cache,
+                        heavy_scores=h2o_heavy_scores,
+                        label="decode",
+                    )
+                    if h2o_stats.get("applied"):
+                        h2o_heavy_scores = trim_heavy_scores(h2o_heavy_scores, h2o_stats.get("keep_indices"))
+                        place_describe_cache = convert_legacy_kv_to_runtime_cache(legacy_cache)
+                        if h2o_decode_step == 0 or h2o_decode_step % 16 == 0:
+                            print(
+                                "[Debug] H2O cache eviction: "
+                                f"label={h2o_stats.get('label')} "
+                                f"seq_before={h2o_stats.get('seq_before')} "
+                                f"seq_after={h2o_stats.get('seq_after')} "
+                                f"kept_recent={h2o_stats.get('kept_recent')} "
+                                f"kept_heavy={h2o_stats.get('kept_heavy')} "
+                                f"protected_prefix={h2o_stats.get('protected_prefix')} "
+                                f"budget={h2o_stats.get('budget')}"
+                            )
+                except Exception as exc:
+                    print(f"[Debug] H2O decode eviction skipped: {exc}")
+            h2o_decode_step += 1
             new_input_pruning = {'input_ids': next_token}
 
     if not effective_use_kv_cache:
@@ -1432,15 +1660,16 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
     place_target_visit_counts = {}
     visited_transition_target_ids = set()
     used_target_keys = set()
+    used_target_object_ids = set()
     candidate_source_places = {}
 
-    def get_current_described_labels_for_place(place_idx):
+    def get_current_described_labels_for_place(place_idx, selected_only=True):
         node = topomap.find_node(topomap.root, f'Place {place_idx}')
         if node is None:
             return set()
         current_labels = set()
         selected_indices = None
-        if hasattr(topomap, "_get_selected_description_indices"):
+        if selected_only and hasattr(topomap, "_get_selected_description_indices"):
             try:
                 selected_indices = topomap._get_selected_description_indices(
                     node,
@@ -1469,12 +1698,12 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                     current_labels.add(normalized)
         return current_labels
 
-    def get_current_described_objects_for_place(place_idx):
+    def get_current_described_objects_for_place(place_idx, selected_only=True):
         node = topomap.find_node(topomap.root, f'Place {place_idx}')
         if node is None:
             return set()
         selected_indices = None
-        if hasattr(topomap, "_get_selected_description_indices"):
+        if selected_only and hasattr(topomap, "_get_selected_description_indices"):
             try:
                 selected_indices = topomap._get_selected_description_indices(
                     node,
@@ -1504,6 +1733,86 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                 if normalized:
                     current_objects.add((angle_value, normalized))
         return current_objects
+
+    def get_described_angles_for_label(place_idx, label, selected_only=True):
+        return [
+            angle
+            for angle, observed_label in get_current_described_objects_for_place(place_idx, selected_only)
+            if planner_label_match(observed_label, label)
+        ]
+
+    def is_described_label_match(place_idx, label, selected_only=True):
+        return any(
+            planner_label_match(observed_label, label)
+            for observed_label in get_current_described_labels_for_place(place_idx, selected_only)
+        )
+
+    def synthesize_semantic_candidates_for_place(
+        place_idx,
+        current_objects,
+        selected_target_ids,
+        only_labels=None,
+        allow_final_goal=False,
+    ):
+        node = topomap.find_node(topomap.root, f'Place {place_idx}')
+        if node is None:
+            return []
+        only_labels = {
+            canonical_goal_name(label)
+            for label in only_labels
+        } if only_labels is not None else None
+        observed_by_label = {}
+        for angle, observed_label in current_objects:
+            normalized_observed = canonical_goal_name(observed_label)
+            if only_labels is not None and normalized_observed not in only_labels:
+                continue
+            if normalized_observed == final_goal and not allow_final_goal:
+                continue
+            if is_low_value_planner_label(normalized_observed, final_goal):
+                continue
+            if not (
+                normalized_observed == final_goal
+                or normalized_observed in transition_planner_labels
+                or normalized_observed in semantic_anchor_labels
+            ):
+                continue
+            observed_by_label.setdefault(normalized_observed, []).append(int(angle))
+
+        synthesized = []
+        for observed_label, observed_angles in observed_by_label.items():
+            scene_matches = []
+            for object_id, scene_object in enumerate(scene.objects):
+                if object_id == 0 or object_id in selected_target_ids:
+                    continue
+                if object_id in used_target_object_ids:
+                    continue
+                scene_label = canonical_goal_name(scene_object.category.name())
+                if not planner_label_match(observed_label, scene_label):
+                    continue
+                candidate_key = (scene_label, int(observed_angles[0]), int(object_id))
+                if candidate_key in used_target_keys:
+                    continue
+                if not is_revisitable_transition_candidate(scene_label, object_id):
+                    continue
+                object_position = np.array(scene_object.obb.center, dtype=np.float32)
+                distance_to_place = euclidean(np.array(node.position)[[0, 2]], object_position[[0, 2]])
+                scene_matches.append((distance_to_place, scene_label, object_id, object_position))
+            if not scene_matches:
+                continue
+            scene_matches.sort(key=lambda item: item[0])
+            _, scene_label, object_id, object_position = scene_matches[0]
+            synthesized.append(
+                (
+                    scene_label,
+                    int(observed_angles[0]),
+                    int(object_id),
+                    0.5,
+                    scene_label,
+                    object_position,
+                )
+            )
+            selected_target_ids.add(int(object_id))
+        return synthesized
 
     def get_place_group(place_idx):
         node = topomap.find_node(topomap.root, f'Place {place_idx}')
@@ -1547,16 +1856,49 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
 
     def is_revisitable_target(candidate):
         label = canonical_goal_name(candidate[0])
+        if int(candidate[2]) in used_target_object_ids:
+            return False
         target_key = (label, int(candidate[1]), int(candidate[2]))
         if target_key in used_target_keys:
             return False
         return is_revisitable_transition_candidate(label, candidate[2])
+
+    def is_synthesized_candidate(candidate):
+        try:
+            return float(candidate[3]) <= 0.500001
+        except Exception:
+            return False
+
+    def target_rank_tuple(target, place_idx=None):
+        label = canonical_goal_name(target[0])
+        try:
+            confidence = float(target[3])
+        except Exception:
+            confidence = 0.0
+        synthesized = is_synthesized_candidate(target)
+        exact_angles = []
+        if place_idx is not None:
+            exact_angles = get_described_angles_for_label(place_idx, label)
+        exact_visible = place_idx is not None and int(target[1]) in exact_angles
+        transition = label in transition_planner_labels
+        return (
+            label == final_goal,
+            exact_visible,
+            not synthesized,
+            transition,
+            label == "window",
+            confidence,
+            get_planner_label_priority(label, final_goal),
+            -int(target[1]),
+        )
 
     def collect_allowed_targets_by_place():
         candidate_source_places.clear()
         raw_allowed_targets = {}
         for place_idx, place_candidates in enumerate(topomap.place_clip_id):
             current_objects = get_current_described_objects_for_place(place_idx)
+            all_current_objects = get_current_described_objects_for_place(place_idx, selected_only=False)
+            selected_target_ids = set()
             selected_targets = []
             for object_tuple in place_candidates:
                 if len(object_tuple) == 0:
@@ -1564,25 +1906,58 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                 candidate = object_tuple[0]
                 label = canonical_goal_name(str(candidate[0]).strip().lower())
                 angle = int(candidate[1])
-                if (angle, label) not in current_objects:
+                exact_visible_match = any(
+                    angle == observed_angle and planner_label_match(observed_label, label)
+                    for observed_angle, observed_label in current_objects
+                )
+                selected_label_match = is_described_label_match(place_idx, label)
+                all_label_match = is_described_label_match(place_idx, label, selected_only=False)
+                verified_goal_candidate = label == final_goal
+                if not (
+                    exact_visible_match
+                    or selected_label_match
+                    or all_label_match
+                    or verified_goal_candidate
+                ):
                     continue
                 if not is_semantically_reasonable_planner_label(label, final_goal):
                     continue
                 if not is_revisitable_target(candidate):
                     continue
                 selected_targets.append(candidate)
+                selected_target_ids.add(int(candidate[2]))
+            if not selected_targets:
+                selected_targets.extend(
+                    synthesize_semantic_candidates_for_place(
+                        place_idx,
+                        all_current_objects,
+                        selected_target_ids,
+                    )
+                )
+            if selected_targets:
+                exact_count = 0
+                relaxed_count = 0
+                for target in selected_targets:
+                    target_label = canonical_goal_name(target[0])
+                    target_angle = int(target[1])
+                    if any(
+                        target_angle == observed_angle and planner_label_match(observed_label, target_label)
+                        for observed_angle, observed_label in current_objects
+                    ):
+                        exact_count += 1
+                    else:
+                        relaxed_count += 1
+                if relaxed_count > 0:
+                    print(
+                        f"[Debug] resolver candidates place={place_idx}: "
+                        f"exact={exact_count} relaxed_or_synthesized={relaxed_count}"
+                    )
             filtered_targets = [
                 target for target in selected_targets
                 if not is_low_value_planner_label(target[0], final_goal)
             ]
             filtered_targets.sort(
-                key=lambda target: (
-                    canonical_goal_name(target[0]) == final_goal,
-                    canonical_goal_name(target[0]) in transition_planner_labels,
-                    canonical_goal_name(target[0]) == "window",
-                    get_planner_label_priority(target[0], final_goal),
-                    -int(target[1]),
-                ),
+                key=lambda target: target_rank_tuple(target, place_idx),
                 reverse=True,
             )
             raw_allowed_targets[place_idx] = filtered_targets
@@ -1592,6 +1967,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
         for representative, member_places in group_members.items():
             grouped_candidates = []
             seen_target_keys = set()
+            seen_target_object_ids = set()
             for member_place in member_places:
                 for candidate in raw_allowed_targets.get(member_place, []):
                     target_key = (
@@ -1599,26 +1975,27 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                         int(candidate[1]),
                         int(candidate[2]),
                     )
-                    if target_key in seen_target_keys:
+                    object_id = int(candidate[2])
+                    if target_key in seen_target_keys or object_id in seen_target_object_ids:
                         continue
                     seen_target_keys.add(target_key)
+                    seen_target_object_ids.add(object_id)
                     grouped_candidates.append(candidate)
                     candidate_source_places[target_key] = int(member_place)
             grouped_candidates.sort(
-                key=lambda target: (
-                    canonical_goal_name(target[0]) == final_goal,
-                    canonical_goal_name(target[0]) in transition_planner_labels,
-                    canonical_goal_name(target[0]) == "window",
-                    get_planner_label_priority(target[0], final_goal),
-                    -int(target[1]),
-                ),
+                key=lambda target: target_rank_tuple(target, candidate_source_places.get((
+                    canonical_goal_name(target[0]),
+                    int(target[1]),
+                    int(target[2]),
+                ), representative)),
                 reverse=True,
             )
             grouped_allowed_targets[int(representative)] = grouped_candidates
         return grouped_allowed_targets
 
-    def collect_allowed_objects_by_place():
-        allowed_targets_by_place = collect_allowed_targets_by_place()
+    def collect_allowed_objects_by_place(allowed_targets_by_place=None):
+        if allowed_targets_by_place is None:
+            allowed_targets_by_place = collect_allowed_targets_by_place()
         base_allowed_by_place = {}
         for place_idx, targets in allowed_targets_by_place.items():
             ordered_labels = []
@@ -1865,7 +2242,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
         print(place_describe)
 
         allowed_targets_by_place = collect_allowed_targets_by_place()
-        allowed_objects_by_place = collect_allowed_objects_by_place()
+        allowed_objects_by_place = collect_allowed_objects_by_place(allowed_targets_by_place)
         allowed_objects = order_labels_by_goal_relevance(
             list(
                 {
@@ -1879,7 +2256,18 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
         print(f"[Debug] allowed planner objects by place: {allowed_objects_by_place}")
         preselected_planner_choice = None
         direct_goal_choice = find_direct_goal_choice()
-        if direct_goal_choice is not None:
+        if only_llm_baseline:
+            print("[Debug] only-LLM baseline enabled: planner constraints, bypasses, and fallbacks are disabled")
+            llava_answer2 = planning(
+                place_describe,
+                place_describe_cache,
+                final_goal,
+                trajectory,
+                [],
+                {},
+            )
+        elif direct_goal_choice is not None:
+            preselected_planner_choice = direct_goal_choice
             llava_answer2 = json.dumps(direct_goal_choice, ensure_ascii=False)
             print(f"[Debug] bypassing planner because goal is already observed: {llava_answer2}")
         elif len(allowed_objects) == 1:
@@ -1926,10 +2314,18 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
 
         if preselected_planner_choice is not None:
             planner_choice = preselected_planner_choice
+        elif only_llm_baseline:
+            planner_choice = resolve_minimal_llm_choice(
+                parse_planner_response_minimal(llava_answer2),
+                allowed_targets_by_place,
+            )
         else:
             planner_choice = parse_planner_response(llava_answer2, allowed_objects_by_place, final_goal)
         if planner_choice is None:
             print(f"[Debug] failed to recover planner response from raw text: {llava_answer2!r}")
+            if only_llm_baseline:
+                print("[Debug] only-LLM baseline treating invalid planner response as episode failure")
+                break
             planner_choice = choose_frontier_fallback(allowed_objects_by_place)
             if planner_choice is None:
                 break
@@ -1962,9 +2358,23 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
             objects = [objects[0]]
         objects = [objects[0].strip().lower()]
         if int(target_place) >= len(topomap.place_clip_id):
+            if only_llm_baseline:
+                print(f"[Debug] only-LLM baseline invalid place {target_place}; stopping episode")
+                break
             target_place = 0
         current_place_allowed = allowed_objects_by_place.get(int(target_place), [])
-        if objects[0] not in current_place_allowed:
+        requested_object = canonical_goal_name(objects[0])
+        has_matching_target_candidate = any(
+            canonical_goal_name(candidate[0]) == requested_object
+            for candidate in allowed_targets_by_place.get(int(target_place), [])
+        )
+        if only_llm_baseline and not has_matching_target_candidate:
+            print(
+                f"[Debug] only-LLM baseline invalid target: place={target_place} "
+                f"object={objects[0]!r} has no resolved navigation candidate"
+            )
+            break
+        if objects[0] not in current_place_allowed and not has_matching_target_candidate:
             remapped = False
             if final_goal in allowed_objects:
                 for place_idx, labels in allowed_objects_by_place.items():
@@ -2021,6 +2431,12 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                     target_tuple = candidate
                     break
         if target_tuple is None and place_targets:
+            if only_llm_baseline:
+                print(
+                    f"[Debug] only-LLM baseline no exact target match for {objects[0]!r}; "
+                    "stopping episode"
+                )
+                break
             print(
                 f"[Debug] no exact candidate match for {objects[0]!r} in representative place {target_place}; "
                 f"falling back to first grouped candidate"
@@ -2028,6 +2444,8 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
             target_tuple = place_targets[0]
         if target_tuple is None:
             print(f"[Debug] failed to resolve target tuple for planner object {objects[0]!r}")
+            if only_llm_baseline:
+                break
             fallback_choice = choose_frontier_fallback(allowed_objects_by_place)
             if fallback_choice is None:
                 break
@@ -2055,6 +2473,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
         resolved_source_place = candidate_source_places.get(target_key, target_place)
         place_target_visit_counts[target_place] = place_target_visit_counts.get(target_place, 0) + 1
         used_target_keys.add(target_key)
+        used_target_object_ids.add(int(target_tuple[2]))
         if canonical_goal_name(target_tuple[0]) in transition_planner_labels:
             visited_transition_target_ids.add(int(target_tuple[2]))
         print(f"[Debug] resolved target tuple: {target_tuple} from representative place {target_place}")
@@ -2301,10 +2720,10 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                     steps += 1
 
                 if episode_success:
-                    print("[Debug] final goal detected; approaching its coordinates before stopping")
                     final_length += total_distance_traveled
                     length_this_epoch += total_distance_traveled
-                    if visible_goal_target_position is not None:
+                    if approach_visible_goal_with_gt and visible_goal_target_position is not None:
+                        print("[Debug] final goal detected; approaching GT coordinates before stopping")
                         approach_stop_distance = 1.5
                         approach_path = ThorShortestPath()
                         approach_path.requested_start = agent.state.position
@@ -2353,6 +2772,8 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                             length_this_epoch += approach_distance_traveled
                         else:
                             print("[Debug] no path found for final goal close approach")
+                    else:
+                        print("[Debug] final goal detected by observation; stopping without GT coordinate approach")
                     sr = 1
                     spl = 1 if final_length == 0 else min(1, distance / max(final_length, 1e-6))
                     break
@@ -2399,7 +2820,7 @@ def val_auto():
     fixed_start_rotation = None if fixed_start_rotation_raw in (None, "") else float(fixed_start_rotation_raw)
 
     houses = load_procthor_houses(seed=experiment_seed, split=os.environ.get("EFFICIENTNAV_PROCTHOR_SPLIT", "train"))
-    forced_house_index_raw = os.environ.get("EFFICIENTNAV_HOUSE_INDEX", "2")
+    forced_house_index_raw = os.environ.get("EFFICIENTNAV_HOUSE_INDEX", "")
     forced_house_index = None
     if forced_house_index_raw not in (None, ""):
         try:
@@ -2417,6 +2838,7 @@ def val_auto():
         houses = [houses[forced_house_index]]
         print(f"[Debug] using forced house index={forced_house_index}")
 
+    completed_eval_episodes = 0
     for i, house in enumerate(houses):
         SR = 0.0
         SPL = 0.0
@@ -2437,7 +2859,7 @@ def val_auto():
         hard_SPL = 0.0
         hard_episode = 0
         hard_length = 0.0
-        if i >= num_episode:
+        if completed_eval_episodes >= num_episode:
             break
 
         sim_settings = {
@@ -2482,14 +2904,6 @@ def val_auto():
             print("[Debug] skipping house because no target object could be selected")
             continue
 
-        topomap = Navigation_map()
-        topomap.planner_model = planner_model
-        topomap.semantic_model = model_clip
-        topomap.processor = planner_tokenizer
-        topomap.use_kv_cache = use_kv_cache
-        topomap.similarity_threshould = [0.0 for _ in range(len(final_goal_list))]
-        topomap.similarity_times = [0 for _ in range(len(final_goal_list))]
-
         SR_eposion = []
         fail_eposion = []
         subgoal_found = []
@@ -2511,8 +2925,19 @@ def val_auto():
             continue
 
         for j in range(num_environment):
+            if completed_eval_episodes >= num_episode:
+                break
             if j >= num_environment:
                 break
+            topomap = Navigation_map()
+            topomap.planner_model = planner_model
+            topomap.semantic_model = model_clip
+            topomap.processor = planner_tokenizer
+            topomap.use_kv_cache = use_kv_cache
+            topomap.similarity_threshould = [0.0 for _ in range(len(final_goal_list))]
+            topomap.similarity_times = [0 for _ in range(len(final_goal_list))]
+            print(f"[Debug] starting independent environment episode={j + 1}/{num_environment}")
+
             if fixed_goal_instance_index is not None:
                 if fixed_goal_instance_index < 0 or fixed_goal_instance_index >= len(candidate_objects):
                     print(
@@ -2587,19 +3012,22 @@ def val_auto():
             SR += sr
             SPL += spl
             total_episode +=1
+            completed_eval_episodes += 1
             total_length += final_length
             print(
                 f"[Timing] val_auto episode total elapsed={episode_wall_elapsed:.3f}s "
-                f"goal={final_goal} sr={sr} spl={spl:.4f}"
+                f"goal={final_goal} sr={sr} spl={spl:.4f} "
+                f"completed_eval_episodes={completed_eval_episodes}/{num_episode}"
             )
             if sr == 1:
                 print(f"[Debug] episode success: final_goal={final_goal} sr={sr} spl={spl:.4f} final_length={final_length:.4f}")
                 total_length_sr += final_length
                 SR_eposion.append(j)
                 subgoal_found.append(final_goal)
-                print("[Debug] goal reached and visible. Holding current view. Press Ctrl-C to exit.")
-                while True:
-                    time.sleep(1.0)
+                if os.environ.get("EFFICIENTNAV_HOLD_ON_SUCCESS", "0") == "1":
+                    print("[Debug] goal reached and visible. Holding current view. Press Ctrl-C to exit.")
+                    while True:
+                        time.sleep(1.0)
             else:
                 fail_eposion.append(final_goal)
             if distance < easy_threshould:
@@ -2621,7 +3049,7 @@ def val_auto():
                 if sr == 1:
                     medium_length += final_length
             os.makedirs(f'output/{current_time}', exist_ok=True)
-            file_name_result = f'output/{current_time}/results{i}_test.txt'
+            file_name_result = f'output/{current_time}/results{completed_eval_episodes - 1}_test.txt'
             with open(file_name_result, 'w') as file:
                 file.write(f"SR: {SR}\n")
                 file.write(f"SPL: {SPL}\n")
