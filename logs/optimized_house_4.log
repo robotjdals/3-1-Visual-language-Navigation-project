@@ -1,0 +1,12 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:   9%|▉         | 903/10000 [00:00<00:01, 9028.80it/s]Loading train:  19%|█▉        | 1878/10000 [00:00<00:00, 9437.60it/s]Loading train:  28%|██▊       | 2840/10000 [00:00<00:00, 9520.25it/s]Loading train:  38%|███▊      | 3793/10000 [00:00<00:00, 9319.66it/s]Loading train:  47%|████▋     | 4726/10000 [00:00<00:00, 9195.73it/s]Loading train:  56%|█████▋    | 5647/10000 [00:00<00:00, 8980.59it/s]Loading train:  65%|██████▌   | 6546/10000 [00:00<00:00, 8953.38it/s]Loading train:  74%|███████▍  | 7442/10000 [00:00<00:00, 8932.60it/s]Loading train:  84%|████████▍ | 8396/10000 [00:00<00:00, 9114.07it/s]Loading train:  94%|█████████▍| 9385/10000 [00:01<00:00, 9345.58it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 9233.45it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val:  99%|█████████▉| 992/1000 [00:00<00:00, 9904.12it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 9867.58it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test:  96%|█████████▌| 962/1000 [00:00<00:00, 9606.43it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 9582.95it/s]

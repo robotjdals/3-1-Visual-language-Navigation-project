@@ -1,0 +1,54 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:   9%|▉         | 890/10000 [00:00<00:01, 8897.10it/s]Loading train:  18%|█▊        | 1824/10000 [00:00<00:00, 9156.14it/s]Loading train:  28%|██▊       | 2793/10000 [00:00<00:00, 9399.02it/s]Loading train:  37%|███▋      | 3733/10000 [00:00<00:00, 9269.38it/s]Loading train:  47%|████▋     | 4661/10000 [00:00<00:00, 9066.37it/s]Loading train:  56%|█████▌    | 5569/10000 [00:00<00:00, 8676.74it/s]Loading train:  64%|██████▍   | 6440/10000 [00:00<00:00, 8593.84it/s]Loading train:  73%|███████▎  | 7302/10000 [00:00<00:00, 8576.07it/s]Loading train:  82%|████████▏ | 8183/10000 [00:00<00:00, 8646.68it/s]Loading train:  91%|█████████ | 9086/10000 [00:01<00:00, 8759.55it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 8867.35it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val:  96%|█████████▌| 955/1000 [00:00<00:00, 9545.48it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 9538.08it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test:  91%|█████████ | 910/1000 [00:00<00:00, 9094.54it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 9093.91it/s]
+[Debug] using forced house index=5
+[Debug] selectable goal names count=36 sample=['apple', 'bottle', 'bowl', 'butterknife', 'candle', 'cart', 'countertop', 'creditcard', 'desklamp', 'diningtable']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='chair' not found in current house; falling back to interactive selection
+
+Selectable target objects in this house:
+  1. apple
+  2. bottle
+  3. bowl
+  4. butterknife
+  5. candle
+  6. cart
+  7. countertop
+  8. creditcard
+  9. desklamp
+  10. diningtable
+  11. dogbed
+  12. doorway
+  13. drawer
+  14. dresser
+  15. egg
+  16. floor
+  17. fridge
+  18. garbagebag
+  19. keychain
+  20. painting
+  21. pen
+  22. pencil
+  23. peppershaker
+  24. plate
+  25. potato
+  26. remotecontrol
+  27. saltshaker
+  28. sidetable
+  29. soapbottle
+  30. spatula
+  31. spoon
+  32. spraybottle
+  33. vase
+  34. wall
+  35. watch
+  36. window
+Choose target object by number or name: 

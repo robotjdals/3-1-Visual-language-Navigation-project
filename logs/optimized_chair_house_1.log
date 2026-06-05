@@ -1,0 +1,195 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:  10%|▉         | 951/10000 [00:00<00:00, 9506.77it/s]Loading train:  20%|██        | 2022/10000 [00:00<00:00, 10208.13it/s]Loading train:  31%|███       | 3081/10000 [00:00<00:00, 10381.70it/s]Loading train:  41%|████      | 4120/10000 [00:00<00:00, 10162.97it/s]Loading train:  51%|█████▏    | 5137/10000 [00:00<00:00, 9924.13it/s] Loading train:  61%|██████▏   | 6131/10000 [00:00<00:00, 9748.87it/s]Loading train:  71%|███████   | 7107/10000 [00:00<00:00, 9652.02it/s]Loading train:  81%|████████  | 8084/10000 [00:00<00:00, 9683.09it/s]Loading train:  91%|█████████ | 9106/10000 [00:00<00:00, 9845.90it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 9901.28it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 10557.47it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 10476.23it/s]
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] using forced house index=1
+[Debug] selectable goal names count=64 sample=['apple', 'baseballbat', 'basketball', 'bed', 'book', 'bowl', 'box', 'bread', 'butterknife', 'candle']
+[Debug] using requested target object=chair
+[Debug] reachable_positions=3342 candidate_objects_for_chair=18
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(10.250, 0.901, 9.750)
+[Timing] pathfinder goal-distance elapsed=6.994s found=True
+real_distance:8.699747468305834
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='chair .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='chair . table . doorway . floor .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='chair . doorway . ceiling .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='chair . vertical object . black object .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'chair', 'box': [0, 614, 310, 1023]}], [{'label': 'floor', 'box': [370, 643, 1023, 1023]}, {'label': 'doorway', 'box': [442, 433, 589, 759]}, {'label': 'table', 'box': [732, 579, 860, 680]}, {'label': 'chair', 'box': [711, 577, 861, 665]}], [{'label': 'doorway', 'box': [316, 424, 469, 807]}, {'label': 'ceiling', 'box': [0, 0, 1001, 203]}, {'label': 'chair', 'box': [359, 575, 408, 651]}], [{'label': 'black object', 'box': [229, 752, 750, 1021]}, {'label': 'vertical object', 'box': [397, 84, 532, 1020]}]]
+[Debug] dropped verified goal candidate: label=chair angle=0 box=[0, 614, 310, 1023] overlaps=wall#213:1.000
+wall
+floor
+doorway
+[Debug] preserving goal candidate: label=chair angle=90 obj_id=30 visible_ratio=0.000890 bbox=60x88 box_match=0.0705 detection_bbox=150x88
+[Debug] preserving goal candidate: label=chair angle=90 obj_id=33 visible_ratio=0.001043 bbox=57x88 box_match=0.0826 detection_bbox=150x88
+chair
+doorway
+wall
+[Debug] preserving goal candidate: label=chair angle=180 obj_id=41 visible_ratio=0.000927 bbox=49x81 box_match=0.2567 detection_bbox=49x76
+chair
+tv
+[Debug] max_similar_objs_list: [[('wall', 0, 213, 0.5325323939323425, 'wall', array([5.0929995, 1.8875161, 5.093    ], dtype=float32))], [('floor', 90, 97, 1.0, 'floor', array([8.1485   , 0.       , 5.0930004], dtype=float32))], [('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32))], [('chair', 90, 33, 1.0, 'chair', array([15.677233  ,  0.43747374,  7.344473  ], dtype=float32))], [('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32))], [('wall', 180, 214, 0.6041585206985474, 'wall', array([4.074499 , 1.8875161, 5.0929995], dtype=float32))], [('chair', 180, 41, 1.0, 'chair', array([11.68861   ,  0.43745252,  3.9979107 ], dtype=float32))], [('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "shadow",
+        "background"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "floor",
+        "doorway",
+        "ceiling"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+}
+[Debug] resolver candidates place=0: exact=3 relaxed_or_synthesized=2
+[Debug] allowed planner objects: ['chair', 'doorway', 'tv']
+[Debug] allowed planner objects by place: {0: ['chair', 'doorway', 'tv']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 90, "Objects": ["chair"]}
+{"Place": 0, "Angle": 90, "Objects": ["chair"]}
+[Debug] planner selected: place=0, angle=90, objects=['chair']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('chair', 90, 33, 1.0, 'chair', array([15.677233  ,  0.43747374,  7.344473  ], dtype=float32)), ('chair', 180, 41, 1.0, 'chair', array([11.68861   ,  0.43745252,  3.9979107 ], dtype=float32)), ('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32)), ('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32)), ('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32))]
+[Debug] resolved target tuple: ('chair', 90, 33, 1.0, 'chair', array([15.677233  ,  0.43747374,  7.344473  ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:chair,sub_goal:chair,place:0,trajectory: chair in Place 0.
+sub_target_id:33
+target:chair
+final_goal:chair
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=4.387s found=True
+[Debug] sub-goal visible on screen: label=chair ratio=0.002136 bbox=83x124
+[Debug] calling detection service: position_id=goal-visible-1-0-31 angle=45 prompt='chair .'
+[Debug] received detection service result: position_id=goal-visible-1-0-31 angle=45
+[Debug] semantic goal candidate rejected by RGB detector: label=chair ratio=0.014080 semantic_bbox=151x245
+[Debug] calling detection service: position_id=goal-visible-1-0-32 angle=45 prompt='chair .'
+[Debug] received detection service result: position_id=goal-visible-1-0-32 angle=45
+[Debug] semantic goal candidate rejected by RGB detector: label=chair ratio=0.014694 semantic_bbox=172x224
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+1+1 angle=0 prompt='chair . doorway . window .'
+[Debug] received detection service result: position_id=big+1+1 angle=0
+[Debug] calling detection service: position_id=big+1+1 angle=90 prompt='chair . frame . clouds .'
+[Debug] received detection service result: position_id=big+1+1 angle=90
+[Debug] calling detection service: position_id=big+1+1 angle=180 prompt='chair . tv . laptop .'
+[Debug] received detection service result: position_id=big+1+1 angle=180
+[Debug] calling detection service: position_id=big+1+1 angle=270 prompt='chair . doorway . tv . floor .'
+[Debug] received detection service result: position_id=big+1+1 angle=270
+[Debug] box_info_list_sum: [[], [{'label': 'frame', 'box': [909, 0, 1024, 307]}], [{'label': 'laptop', 'box': [245, 732, 463, 957]}], [{'label': 'floor', 'box': [0, 619, 1022, 1023]}, {'label': 'tv', 'box': [645, 482, 696, 591]}, {'label': 'doorway', 'box': [904, 387, 1023, 937]}]]
+painting
+laptop
+[Debug] max_similar_objs_list: [[('painting', 90, 136, 0.6225451231002808, 'painting', array([16.276129 ,  2.169989 ,  6.7006993], dtype=float32))], [('laptop', 180, 117, 1.0, 'laptop', array([15.822378 ,  0.8931596,  6.659296 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "shadow",
+        "background"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+} {
+    "Place": 1,
+    "Angle": 0,
+    "Objects": [
+        "window",
+        "doorway"
+    ]
+}{
+    "Place": 1,
+    "Angle": 90,
+    "Objects": [
+        "clouds",
+        "painting"
+    ]
+}{
+    "Place": 1,
+    "Angle": 180,
+    "Objects": [
+        "tv",
+        "laptop"
+    ]
+}
+[Debug] resolver candidates place=0: exact=2 relaxed_or_synthesized=2
+[Debug] allowed planner objects: ['doorway']
+[Debug] allowed planner objects by place: {0: ['doorway']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 180, "Objects": ["chair"]}
+{"Place": 0, "Angle": 180, "Objects": ["chair"]}
+[Debug] planner selected: place=0, angle=180, objects=['chair']
+last_key:['Place 0']
+[Debug] allowed_targets_by_place[0] candidates: [('chair', 180, 41, 1.0, 'chair', array([11.68861   ,  0.43745252,  3.9979107 ], dtype=float32)), ('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32)), ('laptop', 180, 117, 1.0, 'laptop', array([15.822378 ,  0.8931596,  6.659296 ], dtype=float32)), ('painting', 90, 136, 0.6225451231002808, 'painting', array([16.276129 ,  2.169989 ,  6.7006993], dtype=float32)), ('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32)), ('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32))]
+[Debug] resolved target tuple: ('chair', 180, 41, 1.0, 'chair', array([11.68861   ,  0.43745252,  3.9979107 ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:chair,sub_goal:chair,place:0,trajectory: chair in Place 0.
+sub_target_id:41
+target:chair
+final_goal:chair
+final_length:7.1139631271362305
+[Timing] pathfinder to-subgoal elapsed=4.338s found=True
+[Debug] sub-goal visible on screen: label=chair ratio=0.002254 bbox=80x119
+[Debug] calling detection service: position_id=goal-visible-2-1-19 angle=135 prompt='chair .'
+[Debug] received detection service result: position_id=goal-visible-2-1-19 angle=135
+[Debug] final goal visible on screen: label=chair ratio=0.014784 semantic_bbox=188x303 rgb_bbox=190x298
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_19.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=0.957s found=True
+[Debug] close enough to final goal coordinates: label=chair distance=1.424
+[Timing] episode elapsed=62.462s sr=1 spl=0.7259 final_length=11.9853
+[Timing] val_auto episode total elapsed=62.462s goal=chair sr=1 spl=0.7259
+[Debug] episode success: final_goal=chair sr=1 spl=0.7259 final_length=11.9853

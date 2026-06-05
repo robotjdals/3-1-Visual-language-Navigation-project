@@ -1,0 +1,873 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:   9%|▉         | 906/10000 [00:00<00:01, 9055.78it/s]Loading train:  20%|█▉        | 1958/10000 [00:00<00:00, 9913.66it/s]Loading train:  30%|██▉       | 2950/10000 [00:00<00:00, 9518.40it/s]Loading train:  39%|███▉      | 3915/10000 [00:00<00:00, 9565.93it/s]Loading train:  49%|████▉     | 4877/10000 [00:00<00:00, 9581.06it/s]Loading train:  58%|█████▊    | 5836/10000 [00:00<00:00, 9461.93it/s]Loading train:  68%|██████▊   | 6787/10000 [00:00<00:00, 9475.57it/s]Loading train:  77%|███████▋  | 7736/10000 [00:00<00:00, 9305.89it/s]Loading train:  88%|████████▊ | 8782/10000 [00:00<00:00, 9657.91it/s]Loading train:  98%|█████████▊| 9764/10000 [00:01<00:00, 9704.81it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 9587.77it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 10230.93it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test:  99%|█████████▊| 986/1000 [00:00<00:00, 9854.72it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 9812.25it/s]
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] selectable goal names count=35 sample=['apple', 'bowl', 'cellphone', 'chair', 'countertop', 'creditcard', 'cup', 'diningtable', 'doorway', 'egg']
+[Debug] using requested target object=sofa
+[Debug] reachable_positions=992 candidate_objects_for_sofa=1
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=90.0 start_point=(6.750, 0.901, 9.000)
+[Timing] pathfinder goal-distance elapsed=0.506s found=True
+real_distance:3.4319805153394647
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='sofa . laptop . window .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='sofa . chair . table .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='sofa . chair . desk . lamp .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='sofa . tv stand .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'laptop', 'box': [824, 749, 1023, 962]}, {'label': 'window', 'box': [9, 261, 446, 826]}], [{'label': 'chair', 'box': [716, 771, 1023, 1023]}, {'label': 'table', 'box': [0, 761, 700, 1022]}], [{'label': 'lamp', 'box': [80, 422, 273, 1008]}, {'label': 'chair', 'box': [455, 554, 586, 646]}, {'label': 'sofa', 'box': [973, 620, 1023, 785]}, {'label': 'desk', 'box': [409, 566, 552, 640]}], [{'label': 'sofa', 'box': [0, 607, 437, 797]}, {'label': 'tv stand', 'box': [298, 575, 421, 644]}]]
+laptop
+window
+chair
+statue
+floorlamp
+chair
+[Debug] preserving goal candidate: label=sofa angle=180 obj_id=41 visible_ratio=0.006754 bbox=49x164 box_match=0.8389 detection_bbox=50x165
+sofa
+[Debug] preserving goal candidate: label=sofa angle=270 obj_id=41 visible_ratio=0.070015 bbox=437x187 box_match=0.8842 detection_bbox=437x190
+tv
+[Debug] max_similar_objs_list: [[('laptop', 0, 29, 1.0, 'laptop', array([ 7.6354885,  0.9170662, 10.0352125], dtype=float32))], [('window', 0, 65, 1.0, 'window', array([ 5.970752 ,  1.4993188, 10.508999 ], dtype=float32))], [('chair', 90, 3, 1.0, 'chair', array([7.860443  , 0.38061038, 8.041011  ], dtype=float32))], [('statue', 90, 44, 0.627722442150116, 'statue', array([7.630681  , 0.96019053, 9.146948  ], dtype=float32))], [('floorlamp', 180, 22, 0.7215485572814941, 'floorlamp', array([7.8611965 , 0.92367643, 7.275919  ], dtype=float32))], [('chair', 180, 8, 1.0, 'chair', array([7.112501  , 0.49567136, 2.7322915 ], dtype=float32))], [('sofa', 180, 41, 1.0, 'sofa', array([3.4744134 , 0.50392896, 7.191756  ], dtype=float32))], [('tv', 270, 46, 0.8397394418716431, 'tv', array([0.47341067, 1.0578212 , 7.1917553 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "window",
+        "laptop"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "statue",
+        "chair"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "chair",
+        "sofa",
+        "floorlamp"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+}
+[Debug] allowed planner objects: ['sofa', 'window', 'tv', 'chair', 'laptop', 'statue', 'floorlamp']
+[Debug] allowed planner objects by place: {0: ['sofa', 'window', 'chair', 'laptop', 'tv', 'floorlamp', 'statue']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 180, "Objects": ["sofa"]}
+{"Place": 0, "Angle": 180, "Objects": ["sofa"]}
+[Debug] planner selected: place=0, angle=180, objects=['sofa']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('sofa', 180, 41, 1.0, 'sofa', array([3.4744134 , 0.50392896, 7.191756  ], dtype=float32)), ('window', 0, 65, 1.0, 'window', array([ 5.970752 ,  1.4993188, 10.508999 ], dtype=float32)), ('chair', 90, 3, 1.0, 'chair', array([7.860443  , 0.38061038, 8.041011  ], dtype=float32)), ('chair', 180, 8, 1.0, 'chair', array([7.112501  , 0.49567136, 2.7322915 ], dtype=float32)), ('laptop', 0, 29, 1.0, 'laptop', array([ 7.6354885,  0.9170662, 10.0352125], dtype=float32)), ('tv', 270, 46, 0.8397394418716431, 'tv', array([0.47341067, 1.0578212 , 7.1917553 ], dtype=float32)), ('floorlamp', 180, 22, 0.7215485572814941, 'floorlamp', array([7.8611965 , 0.92367643, 7.275919  ], dtype=float32)), ('statue', 90, 44, 0.627722442150116, 'statue', array([7.630681  , 0.96019053, 9.146948  ], dtype=float32))]
+[Debug] resolved target tuple: ('sofa', 180, 41, 1.0, 'sofa', array([3.4744134 , 0.50392896, 7.191756  ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:sofa,place:0,trajectory: sofa in Place 0.
+sub_target_id:41
+target:sofa
+final_goal:sofa
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=0.528s found=True
+[Debug] sub-goal visible on screen: label=sofa ratio=0.072453 bbox=443x290
+[Debug] calling detection service: position_id=goal-visible-1-0-1 angle=225 prompt='sofa .'
+[Debug] received detection service result: position_id=goal-visible-1-0-1 angle=225
+[Debug] final goal visible on screen: label=sofa ratio=0.072453 semantic_bbox=443x290 rgb_bbox=447x293
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_1.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=0.543s found=True
+[Debug] close enough to final goal coordinates: label=sofa distance=1.411
+[Timing] episode elapsed=16.744s sr=1 spl=1.0000 final_length=2.4749
+[Timing] val_auto episode total elapsed=16.744s goal=sofa sr=1 spl=1.0000 completed_eval_episodes=1/5
+[Debug] episode success: final_goal=sofa sr=1 spl=1.0000 final_length=2.4749
+[Debug] selectable goal names count=64 sample=['apple', 'baseballbat', 'basketball', 'bed', 'book', 'bowl', 'box', 'bread', 'butterknife', 'candle']
+[Debug] using requested target object=sofa
+[Debug] reachable_positions=3342 candidate_objects_for_sofa=2
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(10.250, 0.901, 9.750)
+[Timing] pathfinder goal-distance elapsed=20.586s found=True
+real_distance:15.881727983645293
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='sofa .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='sofa . doorway . table . floor .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='sofa . doorway . ceiling .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='sofa . vertical object . black object .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[], [{'label': 'doorway', 'box': [442, 433, 589, 759]}, {'label': 'floor', 'box': [370, 643, 1023, 1023]}, {'label': 'table', 'box': [732, 579, 861, 680]}], [{'label': 'doorway', 'box': [316, 425, 469, 806]}, {'label': 'ceiling', 'box': [0, 0, 1001, 203]}], [{'label': 'black object', 'box': [229, 752, 749, 1021]}, {'label': 'vertical object', 'box': [397, 84, 532, 1020]}]]
+doorway
+floor
+doorway
+wall
+tv
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] max_similar_objs_list: [[('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32))], [('floor', 90, 97, 1.0, 'floor', array([8.1485   , 0.       , 5.0930004], dtype=float32))], [('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32))], [('wall', 180, 214, 0.6041585206985474, 'wall', array([4.074499 , 1.8875161, 5.0929995], dtype=float32))], [('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "background",
+        "shadow"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "floor",
+        "doorway",
+        "ceiling"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+}
+[Debug] allowed planner objects: ['doorway', 'tv']
+[Debug] allowed planner objects by place: {0: ['doorway', 'tv']}
+The above is a description of different places in different angles in the environment.Your can get to any place described in the json data. Your goal is to find the sofa. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target. You must choose an object only from this allowed list: doorway, tv. Do not output any object name that is not in the allowed list. Valid choosable objects by place are: Place 0: doorway, tv. The Objects field must contain exactly one object from the chosen place list.Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target.  Return exactly one JSON object by referring to the following template.
+            {"Place": x, "Angle": x, "Objects": ["xxxx"] }
+            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.
+{"Place": "tv", "Angle": 0, "Objects": ["floor"]}
+[Timing] planning mode=kv elapsed=1.142s
+{"Place": 0, "Angle": 0, "Objects": ["tv"]}
+[Debug] planner selected: place=0, angle=0, objects=['tv']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32)), ('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32)), ('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32))]
+[Debug] resolved target tuple: ('tv', 270, 180, 0.5620273351669312, 'tv', array([9.025491 , 1.2942309, 9.712589 ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:tv,place:0,trajectory: tv in Place 0.
+sub_target_id:180
+target:tv
+final_goal:sofa
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=0.722s found=True
+[Debug] sub-goal visible on screen: label=tv ratio=0.080317 bbox=154x645
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+1+1 angle=0 prompt='sofa . building . wall .'
+[Debug] received detection service result: position_id=big+1+1 angle=0
+[Debug] calling detection service: position_id=big+1+1 angle=90 prompt='sofa . doorway . table . floor .'
+[Debug] received detection service result: position_id=big+1+1 angle=90
+[Debug] calling detection service: position_id=big+1+1 angle=180 prompt='sofa . doorway . floor .'
+[Debug] received detection service result: position_id=big+1+1 angle=180
+[Debug] calling detection service: position_id=big+1+1 angle=270 prompt='sofa . tv . light source .'
+[Debug] received detection service result: position_id=big+1+1 angle=270
+[Debug] box_info_list_sum: [[], [{'label': 'floor', 'box': [127, 620, 1023, 1023]}, {'label': 'table', 'box': [635, 569, 728, 645]}, {'label': 'doorway', 'box': [376, 455, 485, 691]}], [{'label': 'doorway', 'box': [76, 392, 233, 920]}, {'label': 'floor', 'box': [0, 788, 787, 1023]}], [{'label': 'tv', 'box': [930, 256, 1024, 1023]}, {'label': 'light source', 'box': [516, 640, 779, 1023]}]]
+[Debug] max_similar_objs_list: []
+[Debug] empty_position: [2, 3]
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "background",
+        "shadow"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "floor",
+        "doorway",
+        "ceiling"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+} {
+    "Place": 1,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "building"
+    ]
+}{
+    "Place": 1,
+    "Angle": 270,
+    "Objects": [
+        "light source"
+    ]
+}
+[Debug] allowed planner objects: ['doorway']
+[Debug] allowed planner objects by place: {0: ['doorway']}
+[Debug] bypassing planner because only one target is allowed: {"Place": 0, "Angle": 90, "Objects": ["doorway"]}
+{"Place": 0, "Angle": 90, "Objects": ["doorway"]}
+[Debug] planner selected: place=0, angle=90, objects=['doorway']
+last_key:['Place 0']
+[Debug] allowed_targets_by_place[0] candidates: [('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32)), ('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32))]
+[Debug] resolved target tuple: ('doorway', 90, 58, 1.0, 'doorway', array([14.478235 ,  1.0376704,  9.763346 ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:doorway,place:0,trajectory: tv in Place 0.doorway in Place 0.
+sub_target_id:58
+target:doorway
+final_goal:sofa
+final_length:1.9142136573791504
+[Timing] pathfinder to-subgoal elapsed=3.653s found=True
+[Debug] sub-goal visible on screen: label=doorway ratio=0.039315 bbox=91x474
+Agent is within 1m of the target. Stopping.
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+2+2 angle=0 prompt='sofa . table . bathroom sink .'
+[Debug] received detection service result: position_id=big+2+2 angle=0
+[Debug] calling detection service: position_id=big+2+2 angle=90 prompt='sofa . doorway . wall .'
+[Debug] received detection service result: position_id=big+2+2 angle=90
+[Debug] calling detection service: position_id=big+2+2 angle=180 prompt='sofa . chair . table .'
+[Debug] received detection service result: position_id=big+2+2 angle=180
+[Debug] calling detection service: position_id=big+2+2 angle=270 prompt='sofa . doorway . ceiling .'
+[Debug] received detection service result: position_id=big+2+2 angle=270
+[Debug] box_info_list_sum: [[{'label': 'table', 'box': [359, 572, 512, 651]}, {'label': 'bathroom sink', 'box': [772, 588, 956, 874]}, {'label': 'sofa', 'box': [292, 577, 326, 656]}], [{'label': 'doorway', 'box': [177, 298, 620, 1021]}], [{'label': 'table', 'box': [53, 651, 373, 871]}, {'label': 'chair', 'box': [105, 618, 320, 927]}], [{'label': 'doorway', 'box': [24, 444, 165, 738]}, {'label': 'ceiling', 'box': [0, 0, 1022, 327]}]]
+floor
+sink
+[Debug] dropped verified goal candidate: label=sofa angle=0 box=[292, 577, 326, 656] overlaps=bed#5:0.746, floor#102:0.109, doorway#55:0.092, wall#235:0.052
+bed
+chair
+wall
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] max_similar_objs_list: [[('floor', 0, 102, 0.6794582009315491, 'floor', array([8.1485, 0.    , 9.167 ], dtype=float32))], [('sink', 0, 164, 0.8100252747535706, 'sink', array([15.910654 ,  0.4880426, 11.919998 ], dtype=float32))], [('bed', 0, 5, 0.6829032301902771, 'bed', array([11.041425  ,  0.41503024, 15.152356  ], dtype=float32))], [('chair', 180, 33, 0.7113682627677917, 'chair', array([15.677233  ,  0.43747374,  7.344473  ], dtype=float32))], [('wall', 270, 230, 0.6041585206985474, 'wall', array([8.1485   , 1.8875163, 5.093    ], dtype=float32))]]
+[Debug] empty_position: [2]
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "background",
+        "shadow"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+} {
+    "Place": 1,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "building"
+    ]
+}{
+    "Place": 1,
+    "Angle": 270,
+    "Objects": [
+        "light source"
+    ]
+} {
+    "Place": 2,
+    "Angle": 0,
+    "Objects": [
+        "floor",
+        "sink"
+    ]
+}{
+    "Place": 2,
+    "Angle": 180,
+    "Objects": [
+        "chair",
+        "chair"
+    ]
+}
+[Debug] allowed planner objects: ['chair', 'sink']
+[Debug] allowed planner objects by place: {0: [], 2: ['sink', 'chair']}
+The above is a description of different places in different angles in the environment.Your can get to any place described in the json data. Your goal is to find the sofa. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target. You must choose an object only from this allowed list: chair, sink. Do not output any object name that is not in the allowed list. Valid choosable objects by place are: Place 2: sink, chair. The Objects field must contain exactly one object from the chosen place list.Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target.  Return exactly one JSON object by referring to the following template.
+            {"Place": x, "Angle": x, "Objects": ["xxxx"] }
+            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.
+{"Place": 2, "Angle": 0, "Objects": ["sink"]}
+[Timing] planning mode=kv elapsed=1.172s
+{"Place": 2, "Angle": 0, "Objects": ["sink"]}
+[Debug] planner selected: place=2, angle=0, objects=['sink']
+last_key:['Place 0', 'Place 0']
+[Debug] allowed_targets_by_place[2] candidates: [('sink', 0, 164, 0.8100252747535706, 'sink', array([15.910654 ,  0.4880426, 11.919998 ], dtype=float32)), ('chair', 180, 33, 0.7113682627677917, 'chair', array([15.677233  ,  0.43747374,  7.344473  ], dtype=float32))]
+[Debug] resolved target tuple: ('sink', 0, 164, 0.8100252747535706, 'sink', array([15.910654 ,  0.4880426, 11.919998 ], dtype=float32)) from representative place 2
+[Debug] resolved source place: 2 for representative place 2
+2
+final_goal:sofa,sub_goal:sink,place:2,trajectory: tv in Place 0.doorway in Place 0.sink in Place 2.
+sub_target_id:164
+target:sink
+final_goal:sofa
+final_length:7.46751594543457
+[Timing] pathfinder to-subgoal elapsed=2.449s found=True
+[Debug] sub-goal visible on screen: label=sink ratio=0.027146 bbox=165x281
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+3+3 angle=0 prompt='sofa . faucet . wall .'
+[Debug] received detection service result: position_id=big+3+3 angle=0
+[Debug] calling detection service: position_id=big+3+3 angle=90 prompt='sofa . wall .'
+[Debug] received detection service result: position_id=big+3+3 angle=90
+[Debug] calling detection service: position_id=big+3+3 angle=180 prompt='sofa . doorway . wall .'
+[Debug] received detection service result: position_id=big+3+3 angle=180
+[Debug] calling detection service: position_id=big+3+3 angle=270 prompt='sofa . doorway . toilet .'
+[Debug] received detection service result: position_id=big+3+3 angle=270
+[Debug] box_info_list_sum: [[{'label': 'wall', 'box': [0, 0, 1023, 1019]}], [{'label': 'wall', 'box': [0, 0, 1023, 1023]}, {'label': 'sofa', 'box': [0, 909, 354, 1023]}], [{'label': 'wall', 'box': [1, 0, 1023, 1023]}], [{'label': 'toilet', 'box': [424, 572, 486, 692]}]]
+wall
+wall
+[Debug] dropped verified goal candidate: label=sofa angle=90 box=[0, 909, 354, 1023] overlaps=sink#164:0.648, wall#259:0.168, sinkbasin#168:0.095, wall#262:0.064, faucet#92:0.025
+toilet
+[Debug] max_similar_objs_list: [[('wall', 0, 262, 1.0, 'wall', array([8.1485   , 1.8875163, 6.1115   ], dtype=float32))], [('wall', 90, 259, 1.0, 'wall', array([8.148499 , 1.8875161, 6.1114993], dtype=float32))], [('toilet', 270, 186, 1.0, 'toilet', array([10.642204 ,  0.4727599, 10.986129 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "background",
+        "shadow"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+} {
+    "Place": 1,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "building"
+    ]
+}{
+    "Place": 1,
+    "Angle": 270,
+    "Objects": [
+        "light source"
+    ]
+} {
+    "Place": 2,
+    "Angle": 180,
+    "Objects": [
+        "chair",
+        "chair"
+    ]
+} {
+    "Place": 3,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "faucet"
+    ]
+}{
+    "Place": 3,
+    "Angle": 90,
+    "Objects": [
+        "wall",
+        "shadow"
+    ]
+}{
+    "Place": 3,
+    "Angle": 180,
+    "Objects": [
+        "doorway"
+    ]
+}{
+    "Place": 3,
+    "Angle": 270,
+    "Objects": [
+        "toilet",
+        "doorway"
+    ]
+}
+[Debug] allowed planner objects: ['toilet']
+[Debug] allowed planner objects by place: {0: [], 2: [], 3: ['toilet']}
+[Debug] bypassing planner because only one target is allowed: {"Place": 3, "Angle": 270, "Objects": ["toilet"]}
+{"Place": 3, "Angle": 270, "Objects": ["toilet"]}
+[Debug] planner selected: place=3, angle=270, objects=['toilet']
+last_key:['Place 0', 'Place 0', 'Place 2']
+[Debug] allowed_targets_by_place[3] candidates: [('toilet', 270, 186, 1.0, 'toilet', array([10.642204 ,  0.4727599, 10.986129 ], dtype=float32))]
+[Debug] resolved target tuple: ('toilet', 270, 186, 1.0, 'toilet', array([10.642204 ,  0.4727599, 10.986129 ], dtype=float32)) from representative place 3
+[Debug] resolved source place: 3 for representative place 3
+3
+final_goal:sofa,sub_goal:toilet,place:3,trajectory: tv in Place 0.doorway in Place 0.sink in Place 2.toilet in Place 3.
+sub_target_id:186
+target:toilet
+final_goal:sofa
+final_length:10.192389488220215
+[Timing] pathfinder to-subgoal elapsed=6.014s found=True
+[Debug] sub-goal visible on screen: label=toilet ratio=0.012595 bbox=105x169
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+4+4 angle=0 prompt='sofa . tiled wall . wall .'
+[Debug] received detection service result: position_id=big+4+4 angle=0
+[Debug] calling detection service: position_id=big+4+4 angle=90 prompt='sofa . doorway . floor . wall .'
+[Debug] received detection service result: position_id=big+4+4 angle=90
+[Debug] calling detection service: position_id=big+4+4 angle=180 prompt='sofa . brick . wall .'
+[Debug] received detection service result: position_id=big+4+4 angle=180
+[Debug] calling detection service: position_id=big+4+4 angle=270 prompt='sofa . brick . wall .'
+[Debug] received detection service result: position_id=big+4+4 angle=270
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] box_info_list_sum: [[], [{'label': 'sofa', 'box': [65, 591, 150, 678]}, {'label': 'wall', 'box': [0, 0, 1023, 1022]}, {'label': 'floor', 'box': [0, 654, 613, 1022]}, {'label': 'doorway', 'box': [45, 376, 290, 935]}], [{'label': 'wall', 'box': [0, 0, 1024, 1024]}], [{'label': 'wall', 'box': [0, 0, 1024, 1023]}]]
+[Debug] dropped verified goal candidate: label=sofa angle=90 box=[65, 591, 150, 678] overlaps=chair#2:0.684, wall#255:0.205, floor#102:0.074, doorway#55:0.037
+chair
+doorway
+wall
+[Debug] max_similar_objs_list: [[('chair', 90, 2, 0.6756638288497925, 'chair', array([15.864725 ,  0.3625995, 14.481242 ], dtype=float32))], [('doorway', 90, 55, 1.0, 'doorway', array([13.581179 ,  1.0376704, 12.645655 ], dtype=float32))], [('wall', 180, 260, 1.0, 'wall', array([8.1485   , 1.8875163, 5.093    ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "background",
+        "shadow"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "wall"
+    ]
+} {
+    "Place": 1,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "building"
+    ]
+}{
+    "Place": 1,
+    "Angle": 270,
+    "Objects": [
+        "light source"
+    ]
+} {
+    "Place": 2,
+    "Angle": 180,
+    "Objects": [
+        "chair",
+        "chair"
+    ]
+} {
+    "Place": 3,
+    "Angle": 0,
+    "Objects": [
+        "wall",
+        "faucet"
+    ]
+}{
+    "Place": 3,
+    "Angle": 90,
+    "Objects": [
+        "wall",
+        "shadow"
+    ]
+}{
+    "Place": 3,
+    "Angle": 180,
+    "Objects": [
+        "doorway"
+    ]
+} {
+    "Place": 4,
+    "Angle": 90,
+    "Objects": [
+        "doorway"
+    ]
+}{
+    "Place": 4,
+    "Angle": 180,
+    "Objects": [
+        "wall",
+        "brick"
+    ]
+}{
+    "Place": 4,
+    "Angle": 270,
+    "Objects": [
+        "brick"
+    ]
+}
+[Debug] resolver candidates place=3: exact=1 relaxed_or_synthesized=1
+[Debug] allowed planner objects: ['doorway']
+[Debug] allowed planner objects by place: {0: ['doorway'], 2: ['doorway'], 3: ['doorway']}
+[Debug] bypassing planner because only one target is allowed: {"Place": 0, "Angle": 180, "Objects": ["doorway"]}
+{"Place": 0, "Angle": 180, "Objects": ["doorway"]}
+[Debug] planner selected: place=0, angle=180, objects=['doorway']
+last_key:['Place 0', 'Place 0', 'Place 2', 'Place 3']
+[Debug] allowed_targets_by_place[0] candidates: [('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32))]
+[Debug] resolved target tuple: ('doorway', 180, 57, 1.0, 'doorway', array([11.081314 ,  1.0459483,  6.5430164], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:doorway,place:0,trajectory: tv in Place 0.doorway in Place 0.sink in Place 2.toilet in Place 3.
+sub_target_id:57
+target:doorway
+final_goal:sofa
+final_length:15.563709259033203
+[Timing] pathfinder to-subgoal elapsed=2.664s found=True
+[Debug] sub-goal visible on screen: label=doorway ratio=0.029178 bbox=223x539
+[Debug] calling detection service: position_id=goal-visible-5-4-16 angle=225 prompt='sofa .'
+[Debug] received detection service result: position_id=goal-visible-5-4-16 angle=225
+[Debug] final goal visible on screen: label=sofa ratio=0.016972 semantic_bbox=150x188 rgb_bbox=150x174
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_16.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=10.172s found=True
+[Debug] close enough to final goal coordinates: label=sofa distance=1.491
+[Timing] episode elapsed=147.894s sr=1 spl=0.6574 final_length=24.1599
+[Timing] val_auto episode total elapsed=147.894s goal=sofa sr=1 spl=0.6574 completed_eval_episodes=2/5
+[Debug] episode success: final_goal=sofa sr=1 spl=0.6574 final_length=24.1599
+[Debug] selectable goal names count=41 sample=['apple', 'basketball', 'bed', 'book', 'bowl', 'box', 'butterknife', 'candle', 'cd', 'chair']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=29 sample=['alarmclock', 'baseballbat', 'bed', 'book', 'bowl', 'box', 'cellphone', 'chair', 'desk', 'dogbed']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=25 sample=['apple', 'bed', 'bottle', 'bowl', 'bread', 'cellphone', 'countertop', 'doorway', 'floor', 'microwave']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=36 sample=['apple', 'bottle', 'bowl', 'butterknife', 'candle', 'cart', 'countertop', 'creditcard', 'desklamp', 'diningtable']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=35 sample=['basketball', 'bed', 'bowl', 'cellphone', 'chair', 'creditcard', 'diningtable', 'dishsponge', 'doorway', 'drawer']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=28 sample=['cart', 'cellphone', 'chair', 'coffeemachine', 'countertop', 'creditcard', 'desklamp', 'diningtable', 'dogbed', 'doorway']
+[Debug] using requested target object=sofa
+[Debug] reachable_positions=375 candidate_objects_for_sofa=1
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(2.500, 0.901, 0.750)
+[Timing] pathfinder goal-distance elapsed=0.315s found=True
+real_distance:4.914213562373096
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='sofa . tv . lamp . rack .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='sofa . window . wall .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='sofa . window . trees . sun .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='sofa . doorway . light fixture . wall .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'sofa', 'box': [448, 575, 706, 681]}, {'label': 'tv', 'box': [273, 475, 437, 590]}, {'label': 'lamp', 'box': [183, 523, 270, 661]}, {'label': 'rack', 'box': [670, 575, 887, 982]}], [], [{'label': 'window', 'box': [44, 280, 1021, 875]}, {'label': 'trees', 'box': [103, 487, 1019, 810]}], [{'label': 'doorway', 'box': [56, 203, 671, 1020]}, {'label': 'wall', 'box': [50, 1, 1004, 1021]}]]
+[Debug] preserving goal candidate: label=sofa angle=0 obj_id=33 visible_ratio=0.022966 bbox=258x105 box_match=0.8739 detection_bbox=258x106
+sofa
+tv
+desklamp
+fridge
+window
+doorway
+wall
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] max_similar_objs_list: [[('sofa', 0, 33, 1.0, 'sofa', array([3.1042576, 0.4549118, 5.9278355], dtype=float32))], [('tv', 0, 35, 1.0, 'tv', array([0.87649107, 1.3574086 , 6.090242  ], dtype=float32))], [('desklamp', 0, 7, 0.7352255582809448, 'desklamp', array([0.6478309, 1.059588 , 4.0880523], dtype=float32))], [('fridge', 0, 14, 0.5748386979103088, 'fridge', array([5.7898664 , 0.93250525, 6.0596185 ], dtype=float32))], [('window', 180, 59, 1.0, 'window', array([2.4305038, 1.5      , 0.       ], dtype=float32))], [('doorway', 270, 10, 1.0, 'doorway', array([1.6039999, 1.0371888, 0.5069809], dtype=float32))], [('wall', 270, 39, 1.0, 'wall', array([0.8019998 , 1.6639733 , 0.80199987], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "tv",
+        "fridge",
+        "sofa",
+        "desklamp"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "wall",
+        "window"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "window",
+        "sun",
+        "tiles"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "wall",
+        "light fixture",
+        "doorway"
+    ]
+}
+[Debug] allowed planner objects: ['sofa', 'doorway', 'window', 'tv', 'fridge', 'desklamp']
+[Debug] allowed planner objects by place: {0: ['sofa', 'doorway', 'window', 'tv', 'desklamp', 'fridge']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 0, "Objects": ["sofa"]}
+{"Place": 0, "Angle": 0, "Objects": ["sofa"]}
+[Debug] planner selected: place=0, angle=0, objects=['sofa']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('sofa', 0, 33, 1.0, 'sofa', array([3.1042576, 0.4549118, 5.9278355], dtype=float32)), ('doorway', 270, 10, 1.0, 'doorway', array([1.6039999, 1.0371888, 0.5069809], dtype=float32)), ('window', 180, 59, 1.0, 'window', array([2.4305038, 1.5      , 0.       ], dtype=float32)), ('tv', 0, 35, 1.0, 'tv', array([0.87649107, 1.3574086 , 6.090242  ], dtype=float32)), ('desklamp', 0, 7, 0.7352255582809448, 'desklamp', array([0.6478309, 1.059588 , 4.0880523], dtype=float32)), ('fridge', 0, 14, 0.5748386979103088, 'fridge', array([5.7898664 , 0.93250525, 6.0596185 ], dtype=float32))]
+[Debug] resolved target tuple: ('sofa', 0, 33, 1.0, 'sofa', array([3.1042576, 0.4549118, 5.9278355], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:sofa,place:0,trajectory: sofa in Place 0.
+sub_target_id:33
+target:sofa
+final_goal:sofa
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=0.354s found=True
+[Debug] sub-goal visible on screen: label=sofa ratio=0.010205 bbox=85x158
+[Debug] calling detection service: position_id=goal-visible-1-0-1 angle=314 prompt='sofa .'
+[Debug] received detection service result: position_id=goal-visible-1-0-1 angle=314
+[Debug] final goal visible on screen: label=sofa ratio=0.010205 semantic_bbox=85x158 rgb_bbox=85x160
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_1.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=0.353s found=True
+[Debug] close enough to final goal coordinates: label=sofa distance=1.491
+[Timing] episode elapsed=17.201s sr=1 spl=1.0000 final_length=3.8314
+[Timing] val_auto episode total elapsed=17.201s goal=sofa sr=1 spl=1.0000 completed_eval_episodes=3/5
+[Debug] episode success: final_goal=sofa sr=1 spl=1.0000 final_length=3.8314
+[Debug] selectable goal names count=16 sample=['book', 'candle', 'cellphone', 'diningtable', 'doorway', 'floor', 'floorlamp', 'painting', 'pillow', 'plant']
+[Debug] using requested target object=sofa
+[Debug] reachable_positions=117 candidate_objects_for_sofa=1
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(1.500, 0.901, 2.000)
+[Timing] pathfinder goal-distance elapsed=0.008s found=True
+real_distance:0.7071067811865476
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='sofa . tv . lamp .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='sofa . window . potted plant .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='sofa . doorway . ceiling .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='sofa . tv .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'lamp', 'box': [482, 393, 676, 1022]}, {'label': 'tv', 'box': [0, 521, 405, 947]}], [{'label': 'window', 'box': [772, 392, 998, 775]}, {'label': 'potted plant', 'box': [601, 650, 810, 986]}], [{'label': 'doorway', 'box': [75, 374, 351, 925]}, {'label': 'ceiling', 'box': [1, 0, 1022, 259]}, {'label': 'sofa', 'box': [800, 840, 1023, 1022]}], [{'label': 'sofa', 'box': [0, 760, 625, 1023]}]]
+floorlamp
+tv
+window
+plant
+doorway
+[Debug] preserving goal candidate: label=sofa angle=180 obj_id=13 visible_ratio=0.033769 bbox=222x181 box_match=0.8619 detection_bbox=223x182
+sofa
+[Debug] preserving goal candidate: label=sofa angle=270 obj_id=13 visible_ratio=0.128789 bbox=625x262 box_match=0.8199 detection_bbox=625x263
+[Debug] max_similar_objs_list: [[('floorlamp', 0, 8, 0.7215485572814941, 'floorlamp', array([1.683486 , 0.9319569, 3.4196246], dtype=float32))], [('tv', 0, 14, 1.0, 'tv', array([0.634272 , 1.1199262, 3.229589 ], dtype=float32))], [('window', 90, 25, 1.0, 'window', array([3.703    , 1.2805686, 0.4486292], dtype=float32))], [('plant', 90, 9, 0.7787491083145142, 'plant', array([3.1971178 , 0.49244514, 1.3034467 ], dtype=float32))], [('doorway', 180, 5, 1.0, 'doorway', array([2.6443048, 1.0459483, 0.       ], dtype=float32))], [('sofa', 180, 13, 1.0, 'sofa', array([0.36471945, 0.4475542 , 1.3980304 ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "tv",
+        "floorlamp"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "window",
+        "plant"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "doorway",
+        "ceiling"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+}
+[Debug] resolver candidates place=0: exact=5 relaxed_or_synthesized=1
+[Debug] allowed planner objects: ['sofa', 'doorway', 'window', 'tv', 'plant', 'floorlamp']
+[Debug] allowed planner objects by place: {0: ['sofa', 'doorway', 'window', 'tv', 'plant', 'floorlamp']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 180, "Objects": ["sofa"]}
+{"Place": 0, "Angle": 180, "Objects": ["sofa"]}
+[Debug] planner selected: place=0, angle=180, objects=['sofa']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('sofa', 180, 13, 1.0, 'sofa', array([0.36471945, 0.4475542 , 1.3980304 ], dtype=float32)), ('doorway', 180, 5, 1.0, 'doorway', array([2.6443048, 1.0459483, 0.       ], dtype=float32)), ('window', 90, 25, 1.0, 'window', array([3.703    , 1.2805686, 0.4486292], dtype=float32)), ('tv', 0, 14, 1.0, 'tv', array([0.634272 , 1.1199262, 3.229589 ], dtype=float32)), ('plant', 90, 9, 0.7787491083145142, 'plant', array([3.1971178 , 0.49244514, 1.3034467 ], dtype=float32)), ('floorlamp', 0, 8, 0.7215485572814941, 'floorlamp', array([1.683486 , 0.9319569, 3.4196246], dtype=float32))]
+[Debug] resolved target tuple: ('sofa', 180, 13, 1.0, 'sofa', array([0.36471945, 0.4475542 , 1.3980304 ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:sofa,place:0,trajectory: sofa in Place 0.
+sub_target_id:13
+target:sofa
+final_goal:sofa
+final_length:0
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Timing] pathfinder to-subgoal elapsed=0.008s found=True
+[Debug] sub-goal visible on screen: label=sofa ratio=0.115230 bbox=679x284
+[Debug] calling detection service: position_id=goal-visible-1-0-1 angle=225 prompt='sofa .'
+[Debug] received detection service result: position_id=goal-visible-1-0-1 angle=225
+[Debug] final goal visible on screen: label=sofa ratio=0.115230 semantic_bbox=679x284 rgb_bbox=679x285
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_1.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=0.003s found=True
+[Debug] close enough to final goal coordinates: label=sofa distance=0.937
+[Timing] episode elapsed=13.281s sr=1 spl=1.0000 final_length=0.2500
+[Timing] val_auto episode total elapsed=13.281s goal=sofa sr=1 spl=1.0000 completed_eval_episodes=4/5
+[Debug] episode success: final_goal=sofa sr=1 spl=1.0000 final_length=0.2500
+[Debug] selectable goal names count=21 sample=['baseballbat', 'basketball', 'bed', 'book', 'box', 'cellphone', 'chair', 'desklamp', 'diningtable', 'doorway']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=40 sample=['apple', 'baseballbat', 'bed', 'book', 'box', 'cd', 'chair', 'countertop', 'creditcard', 'desk']
+[Debug] requested EFFICIENTNAV_TARGET_OBJECT='sofa' not found in current house; skipping house
+[Debug] skipping house because no target object could be selected
+[Debug] selectable goal names count=43 sample=['baseballbat', 'bed', 'book', 'boots', 'bowl', 'box', 'chair', 'countertop', 'desk', 'desklamp']
+[Debug] using requested target object=sofa
+[Debug] reachable_positions=347 candidate_objects_for_sofa=1
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(1.250, 0.901, 2.000)
+[Timing] pathfinder goal-distance elapsed=0.126s found=True
+real_distance:2.517766952966369
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='sofa . table . lamp . floor lamp .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='sofa . chair . table . bowl .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='sofa . doorway . counter . toaster .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='sofa . cave . wall .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'table', 'box': [250, 657, 476, 849]}, {'label': 'sofa', 'box': [593, 628, 974, 842]}], [{'label': 'chair', 'box': [361, 726, 443, 1009]}, {'label': 'table', 'box': [416, 657, 926, 1022]}], [{'label': 'doorway', 'box': [294, 373, 569, 930]}, {'label': 'counter', 'box': [620, 734, 1023, 1023]}], [{'label': 'wall', 'box': [1, 0, 1022, 829]}]]
+floor
+[Debug] preserving goal candidate: label=sofa angle=0 obj_id=75 visible_ratio=0.066417 bbox=377x210 box_match=0.8542 detection_bbox=381x214
+sofa
+chair
+floor
+doorway
+countertop
+wall
+[Debug] max_similar_objs_list: [[('floor', 0, 30, 0.6794582009315491, 'floor', array([2.54, 0.  , 2.54], dtype=float32))], [('sofa', 0, 75, 1.0, 'sofa', array([2.5741389, 0.4475542, 4.7152805], dtype=float32))], [('chair', 90, 11, 1.0, 'chair', array([3.1250348, 0.3868456, 2.290052 ], dtype=float32))], [('floor', 90, 28, 0.6794582009315491, 'floor', array([2.54  , 0.    , 1.6935], dtype=float32))], [('doorway', 180, 19, 1.0, 'doorway', array([1.5510572, 1.0500227, 0.       ], dtype=float32))], [('countertop', 180, 12, 0.8331171870231628, 'countertop', array([0.48542398, 0.4709986 , 1.7771144 ], dtype=float32))], [('wall', 270, 84, 1.0, 'wall', array([0.       , 2.0083504, 1.6935   ], dtype=float32))]]
+[Debug] empty_position: []
+ {
+    "Place": 0,
+    "Angle": 0,
+    "Objects": [
+        "floor",
+        "floor lamp",
+        "sofa",
+        "lamp"
+    ]
+}{
+    "Place": 0,
+    "Angle": 90,
+    "Objects": [
+        "floor",
+        "chair",
+        "apple",
+        "bowl"
+    ]
+}{
+    "Place": 0,
+    "Angle": 180,
+    "Objects": [
+        "countertop",
+        "toaster",
+        "doorway"
+    ]
+}{
+    "Place": 0,
+    "Angle": 270,
+    "Objects": [
+        "wall",
+        "cave"
+    ]
+}
+[Debug] allowed planner objects: ['sofa', 'doorway', 'chair', 'countertop']
+[Debug] allowed planner objects by place: {0: ['sofa', 'doorway', 'chair', 'countertop']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 0, "Objects": ["sofa"]}
+{"Place": 0, "Angle": 0, "Objects": ["sofa"]}
+[Debug] planner selected: place=0, angle=0, objects=['sofa']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('sofa', 0, 75, 1.0, 'sofa', array([2.5741389, 0.4475542, 4.7152805], dtype=float32)), ('doorway', 180, 19, 1.0, 'doorway', array([1.5510572, 1.0500227, 0.       ], dtype=float32)), ('chair', 90, 11, 1.0, 'chair', array([3.1250348, 0.3868456, 2.290052 ], dtype=float32)), ('countertop', 180, 12, 0.8331171870231628, 'countertop', array([0.48542398, 0.4709986 , 1.7771144 ], dtype=float32))]
+[Debug] resolved target tuple: ('sofa', 0, 75, 1.0, 'sofa', array([2.5741389, 0.4475542, 4.7152805], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:sofa,sub_goal:sofa,place:0,trajectory: sofa in Place 0.
+sub_target_id:75
+target:sofa
+final_goal:sofa
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=0.117s found=True
+[Debug] sub-goal visible on screen: label=sofa ratio=0.076015 bbox=380x324
+[Debug] calling detection service: position_id=goal-visible-1-0-1 angle=45 prompt='sofa .'
+[Debug] received detection service result: position_id=goal-visible-1-0-1 angle=45
+[Debug] final goal visible on screen: label=sofa ratio=0.076015 semantic_bbox=380x324 rgb_bbox=383x326
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_1.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=0.108s found=True
+[Debug] close enough to final goal coordinates: label=sofa distance=1.419
+[Timing] episode elapsed=15.113s sr=1 spl=1.0000 final_length=1.6850
+[Timing] val_auto episode total elapsed=15.113s goal=sofa sr=1 spl=1.0000 completed_eval_episodes=5/5
+[Debug] episode success: final_goal=sofa sr=1 spl=1.0000 final_length=1.6850

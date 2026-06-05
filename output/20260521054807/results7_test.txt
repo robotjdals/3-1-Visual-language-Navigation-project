@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.46382761001586914
+Total Episodes: 1
+Total Length: 35.395179748535156
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.46382761001586914
+Hard Episodes: 1
+Hard Length: 35.395179748535156
+SR eposion: [0]
+SR subgoal: ['sofa']
+num_node: 7

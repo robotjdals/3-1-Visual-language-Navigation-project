@@ -162,6 +162,77 @@ if internvl_mode and cuda_available:
     planner_model = planner_model.to(primary_device)
 planner_supports_vision = internvl_mode or hasattr(planner_processor, "image_processor")
 planner_chat_dtype = planner_model_kwargs["torch_dtype"] if cuda_available else torch.float32
+
+
+class PlannerTextProcessor:
+    def __init__(self, tokenizer, model=None, internvl_mode=False):
+        self.tokenizer = tokenizer
+        self.model = model
+        self.internvl_mode = internvl_mode
+
+    def apply_chat_template(self, conversation, tokenize=False, add_generation_prompt=True):
+        if self.internvl_mode:
+            template = self.model.conv_template.copy()
+            template.system_message = self.model.system_message
+            for message in conversation:
+                role = message.get("role", "user")
+                content = message.get("content", "")
+                template_role = template.roles[0] if role == "user" else template.roles[1]
+                template.append_message(template_role, content)
+            if add_generation_prompt:
+                template.append_message(template.roles[1], None)
+            prompt = template.get_prompt()
+            if tokenize:
+                return self.tokenizer(prompt, return_tensors="pt")
+            return prompt
+        if hasattr(self.tokenizer, "apply_chat_template"):
+            return self.tokenizer.apply_chat_template(
+                conversation,
+                tokenize=tokenize,
+                add_generation_prompt=add_generation_prompt,
+            )
+        prompt = "\n".join(str(message.get("content", "")) for message in conversation)
+        if tokenize:
+            return self.tokenizer(prompt, return_tensors="pt")
+        return prompt
+
+    def __call__(self, *args, **kwargs):
+        return self.tokenizer(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.tokenizer, name)
+
+
+planner_text_processor = PlannerTextProcessor(
+    planner_tokenizer,
+    model=planner_model,
+    internvl_mode=internvl_mode,
+)
+
+
+def get_planner_eos_token_ids():
+    eos_token_ids = set()
+    if isinstance(planner_tokenizer.eos_token_id, int) and planner_tokenizer.eos_token_id >= 0:
+        eos_token_ids.add(planner_tokenizer.eos_token_id)
+    if hasattr(planner_tokenizer, "convert_tokens_to_ids"):
+        for token in ("<|im_end|>",):
+            token_id = planner_tokenizer.convert_tokens_to_ids(token)
+            if isinstance(token_id, int) and token_id >= 0:
+                eos_token_ids.add(token_id)
+    if internvl_mode and hasattr(planner_model, "conv_template"):
+        stop_token = str(planner_model.conv_template.sep).strip()
+        if stop_token:
+            token_id = planner_tokenizer.convert_tokens_to_ids(stop_token)
+            if isinstance(token_id, int) and token_id >= 0:
+                eos_token_ids.add(token_id)
+    return eos_token_ids
+
+
+def ensure_internvl_context_token_id():
+    if not internvl_mode:
+        return
+    img_context_token_id = planner_tokenizer.convert_tokens_to_ids("<IMG_CONTEXT>")
+    planner_model.img_context_token_id = img_context_token_id
 use_ros2_detection = os.environ.get("EFFICIENTNAV_USE_ROS2_DETECTION", "1") == "1"
 observation_rotation_pause = float(os.environ.get("EFFICIENTNAV_OBSERVATION_ROTATION_PAUSE", "0.25"))
 ros2_detection_timeout_sec = float(os.environ.get("EFFICIENTNAV_ROS2_DETECTION_TIMEOUT", "30.0"))
@@ -498,10 +569,12 @@ def convert_ros_detection_payload_to_box_info_list(payload):
 
 
 def build_chat_prompt(user_text):
-    if not hasattr(planner_tokenizer, "apply_chat_template"):
-        return user_text
     messages = [{"role": "user", "content": user_text}]
-    return planner_tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    return planner_text_processor.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
 
 
 def build_internvl_transform(input_size=448):
@@ -582,6 +655,7 @@ def query_planner_vlm(question, image=None, max_new_tokens=200):
             pixel_values = prepare_internvl_pixel_values(image)
             if "<image>" not in question:
                 question = "<image>\n" + question
+        ensure_internvl_context_token_id()
         generation_config = dict(max_new_tokens=max_new_tokens, do_sample=False)
         with torch.no_grad():
             response = planner_model.chat(
@@ -596,13 +670,24 @@ def query_planner_vlm(question, image=None, max_new_tokens=200):
 
     if image is None:
         prompt = build_chat_prompt(question)
-        inputs = planner_tokenizer(prompt, padding=True, return_tensors="pt").to(device0)
+        inputs = planner_text_processor(prompt, padding=True, return_tensors="pt").to(device0)
         with torch.no_grad():
-            output = planner_model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                pad_token_id=planner_tokenizer.pad_token_id,
-            )
+            if internvl_mode:
+                ensure_internvl_context_token_id()
+                output = planner_model.generate(
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs.get("attention_mask"),
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    eos_token_id=list(get_planner_eos_token_ids()),
+                    pad_token_id=planner_tokenizer.pad_token_id,
+                )
+            else:
+                output = planner_model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    pad_token_id=planner_tokenizer.pad_token_id,
+                )
         generated = output[:, inputs["input_ids"].shape[1]:]
         return planner_tokenizer.decode(generated[0], skip_special_tokens=True).strip()
 
@@ -1470,12 +1555,21 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             {"Place": x, "Angle": x, "Objects": ["xxxx"] }
             If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.'''
     if not effective_use_kv_cache:
-        if internvl_mode:
-            real_output2 = query_planner_vlm(f"{place_describe}\n{input_text}", image=None, max_new_tokens=48)
-        else:
-            prompt2 = build_chat_prompt(f"{place_describe}\n{input_text}")
-            inputs2 = planner_tokenizer(prompt2, padding=True, return_tensors="pt").to(device0)
-            with torch.no_grad():
+        prompt2 = build_chat_prompt(f"{place_describe}\n{input_text}")
+        inputs2 = planner_text_processor(prompt2, padding=True, return_tensors="pt").to(device0)
+        with torch.no_grad():
+            if internvl_mode:
+                ensure_internvl_context_token_id()
+                output2 = planner_model.generate(
+                    input_ids=inputs2["input_ids"],
+                    attention_mask=inputs2.get("attention_mask"),
+                    max_new_tokens=48,
+                    do_sample=False,
+                    repetition_penalty=1.05,
+                    eos_token_id=list(get_planner_eos_token_ids()),
+                    pad_token_id=planner_tokenizer.pad_token_id,
+                )
+            else:
                 output2 = planner_model.generate(
                     **inputs2,
                     max_new_tokens=48,
@@ -1487,18 +1581,11 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
     else:
         text_model = getattr(planner_model, "language_model", planner_model)
         prompt_pruning = build_chat_prompt(input_text)
-        new_input_pruning = planner_tokenizer(prompt_pruning, padding=True, return_tensors="pt").to(device0)
+        new_input_pruning = planner_text_processor(prompt_pruning, padding=True, return_tensors="pt").to(device0)
         generated_tokens = []
         h2o_decode_step = 0
         h2o_heavy_scores = None
-        eos_token_ids = {
-            token_id for token_id in [
-                planner_tokenizer.eos_token_id,
-                planner_tokenizer.convert_tokens_to_ids("<|im_end|>")
-                if hasattr(planner_tokenizer, "convert_tokens_to_ids") else None,
-            ]
-            if isinstance(token_id, int) and token_id >= 0
-        }
+        eos_token_ids = get_planner_eos_token_ids()
         for _ in range(48):
             with torch.no_grad():
                 outputs = text_model(
@@ -1543,10 +1630,9 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             new_input_pruning = {'input_ids': next_token}
 
     if not effective_use_kv_cache:
-        if not internvl_mode:
-            generated = output2[:, inputs2["input_ids"].shape[1]:]
-            real_output2 = planner_tokenizer.decode(generated[0], skip_special_tokens=True)
-            del output2
+        generated = output2[:, inputs2["input_ids"].shape[1]:]
+        real_output2 = planner_tokenizer.decode(generated[0], skip_special_tokens=True)
+        del output2
     else:
         real_output2 = planner_tokenizer.decode(generated_tokens, skip_special_tokens=True)
         if last_non_space_char(real_output2) == ']':
@@ -2932,7 +3018,7 @@ def val_auto():
             topomap = Navigation_map()
             topomap.planner_model = planner_model
             topomap.semantic_model = model_clip
-            topomap.processor = planner_tokenizer
+            topomap.processor = planner_text_processor
             topomap.use_kv_cache = use_kv_cache
             topomap.similarity_threshould = [0.0 for _ in range(len(final_goal_list))]
             topomap.similarity_times = [0 for _ in range(len(final_goal_list))]

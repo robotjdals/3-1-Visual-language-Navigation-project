@@ -1,0 +1,16 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:  11%|█         | 1058/10000 [00:00<00:00, 10578.98it/s]Loading train:  22%|██▏       | 2201/10000 [00:00<00:00, 11078.18it/s]Loading train:  34%|███▎      | 3353/10000 [00:00<00:00, 11277.41it/s]Loading train:  45%|████▍     | 4481/10000 [00:00<00:00, 10992.55it/s]Loading train:  56%|█████▌    | 5582/10000 [00:00<00:00, 10605.78it/s]Loading train:  66%|██████▋   | 6646/10000 [00:00<00:00, 10523.06it/s]Loading train:  77%|███████▋  | 7700/10000 [00:00<00:00, 10376.54it/s]Loading train:  88%|████████▊ | 8791/10000 [00:00<00:00, 10536.76it/s]Loading train:  99%|█████████▊| 9872/10000 [00:00<00:00, 10620.26it/s]Loading train: 100%|██████████| 10000/10000 [00:00<00:00, 10682.67it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 11244.21it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 11428.53it/s]
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.

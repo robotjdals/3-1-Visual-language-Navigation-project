@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.33873599767684937
+Total Episodes: 1
+Total Length: 10.13172721862793
+Easy SR: 1.0
+Easy SPL: 0.33873599767684937
+Easy Episodes: 1
+Easy Length: 10.13172721862793
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 0.0
+Hard SPL: 0.0
+Hard Episodes: 0
+Hard Length: 0.0
+SR eposion: [0]
+SR subgoal: ['chair']
+num_node: 4

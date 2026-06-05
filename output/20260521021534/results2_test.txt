@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.7014864087104797
+Total Episodes: 1
+Total Length: 13.028175354003906
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.7014864087104797
+Hard Episodes: 1
+Hard Length: 13.028175354003906
+SR eposion: [0]
+SR subgoal: ['toilet']
+num_node: 6

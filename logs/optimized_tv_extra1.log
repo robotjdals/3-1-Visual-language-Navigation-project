@@ -1,0 +1,16 @@
+/home/min/miniconda3/envs/test/lib/python3.10/site-packages/torch/cuda/__init__.py:129: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 804: forward compatibility was attempted on non supported HW (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:109.)
+  return torch._C._cuda_getDeviceCount() > 0
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=True budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:  10%|█         | 1018/10000 [00:00<00:00, 10173.65it/s]Loading train:  21%|██        | 2056/10000 [00:00<00:00, 10294.60it/s]Loading train:  31%|███       | 3109/10000 [00:00<00:00, 10401.00it/s]Loading train:  42%|████▏     | 4150/10000 [00:00<00:00, 10270.95it/s]Loading train:  52%|█████▏    | 5178/10000 [00:00<00:00, 10150.62it/s]Loading train:  62%|██████▏   | 6203/10000 [00:00<00:00, 10182.59it/s]Loading train:  73%|███████▎  | 7256/10000 [00:00<00:00, 10292.31it/s]Loading train:  83%|████████▎ | 8332/10000 [00:00<00:00, 10434.83it/s]Loading train:  94%|█████████▍| 9406/10000 [00:00<00:00, 10528.44it/s]Loading train: 100%|██████████| 10000/10000 [00:00<00:00, 10375.97it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 10671.58it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 11111.80it/s]
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.

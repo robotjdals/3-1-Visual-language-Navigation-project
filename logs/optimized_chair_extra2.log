@@ -1,0 +1,14 @@
+/home/min/miniconda3/envs/test/lib/python3.10/site-packages/torch/cuda/__init__.py:129: UserWarning: CUDA initialization: Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 804: forward compatibility was attempted on non supported HW (Triggered internally at /pytorch/c10/cuda/CUDAFunctions.cpp:109.)
+  return torch._C._cuda_getDeviceCount() > 0
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=True budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:   9%|▉         | 887/10000 [00:00<00:01, 8855.48it/s]Loading train:  18%|█▊        | 1812/10000 [00:00<00:00, 9080.90it/s]Loading train:  27%|██▋       | 2726/10000 [00:00<00:00, 9101.27it/s]Loading train:  36%|███▋      | 3637/10000 [00:00<00:00, 8979.79it/s]Loading train:  45%|████▌     | 4536/10000 [00:00<00:00, 8969.34it/s]Loading train:  54%|█████▍    | 5434/10000 [00:00<00:00, 8817.69it/s]Loading train:  63%|██████▎   | 6323/10000 [00:00<00:00, 8836.22it/s]Loading train:  73%|███████▎  | 7261/10000 [00:00<00:00, 9004.39it/s]Loading train:  82%|████████▏ | 8207/10000 [00:00<00:00, 9142.31it/s]Loading train:  92%|█████████▏| 9167/10000 [00:01<00:00, 9282.33it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 9102.59it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val:  98%|█████████▊| 980/1000 [00:00<00:00, 9799.21it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 9777.91it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test:  97%|█████████▋| 969/1000 [00:00<00:00, 9682.48it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 9622.39it/s]

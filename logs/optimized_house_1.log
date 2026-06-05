@@ -1,0 +1,108 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:  10%|█         | 1002/10000 [00:00<00:00, 10018.27it/s]Loading train:  21%|██        | 2077/10000 [00:00<00:00, 10442.95it/s]Loading train:  32%|███▏      | 3153/10000 [00:00<00:00, 10587.18it/s]Loading train:  42%|████▏     | 4212/10000 [00:00<00:00, 10313.38it/s]Loading train:  52%|█████▏    | 5245/10000 [00:00<00:00, 9997.72it/s] Loading train:  62%|██████▏   | 6247/10000 [00:00<00:00, 9944.82it/s]Loading train:  72%|███████▏  | 7243/10000 [00:00<00:00, 9807.84it/s]Loading train:  82%|████████▏ | 8225/10000 [00:00<00:00, 9735.87it/s]Loading train:  92%|█████████▏| 9230/10000 [00:00<00:00, 9830.68it/s]Loading train: 100%|██████████| 10000/10000 [00:01<00:00, 9712.27it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 10068.67it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 10117.39it/s]
+[Debug] using forced house index=1
+[Debug] selectable goal names count=64 sample=['apple', 'baseballbat', 'basketball', 'bed', 'book', 'bowl', 'box', 'bread', 'butterknife', 'candle']
+
+Selectable target objects in this house:
+  1. apple
+  2. baseballbat
+  3. basketball
+  4. bed
+  5. book
+  6. bowl
+  7. box
+  8. bread
+  9. butterknife
+  10. candle
+  11. cd
+  12. cellphone
+  13. chair
+  14. cloth
+  15. countertop
+  16. creditcard
+  17. desklamp
+  18. diningtable
+  19. doorframe
+  20. doorway
+  21. drawer
+  22. dresser
+  23. faucet
+  24. floor
+  25. floorlamp
+  26. fork
+  27. fridge
+  28. garbagecan
+  29. kettle
+  30. knife
+  31. laptop
+  32. lettuce
+  33. mug
+  34. painting
+  35. papertowelroll
+  36. pencil
+  37. pillow
+  38. plant
+  39. plate
+  40. plunger
+  41. pot
+  42. potato
+  43. remotecontrol
+  44. safe
+  45. shelf
+  46. sidetable
+  47. sink
+  48. sinkbasin
+  49. soapbottle
+  50. sofa
+  51. spraybottle
+  52. statue
+  53. stool
+  54. teddybear
+  55. tennisracket
+  56. toilet
+  57. toiletpaper
+  58. tomato
+  59. tv
+  60. vase
+  61. wall
+  62. watch
+  63. window
+  64. winebottle
+Choose target object by number or name: Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] selected target object=tv
+[Debug] reachable_positions=3342 candidate_objects_for_tv=8
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=270.0 start_point=(10.250, 0.901, 9.750)
+[Timing] pathfinder goal-distance elapsed=0.675s found=True
+real_distance:1.914213562373095
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+Traceback (most recent call last):
+  File "/home/min/test/EfficientNav/efficientnav.py", line 2916, in <module>
+    val_auto()
+  File "/home/min/test/EfficientNav/efficientnav.py", line 2851, in val_auto
+    sr, spl, real_distance,final_length= val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,final_goal,distance)
+  File "/home/min/test/EfficientNav/efficientnav.py", line 2078, in val_one_episode
+    box_info_list_sum = get_objects_boxes(llava_answer1,fig_name,final_goal)
+  File "/home/min/test/EfficientNav/efficientnav.py", line 1040, in get_objects_boxes
+    ros_client = get_detection_ros_client()
+  File "/home/min/test/EfficientNav/efficientnav.py", line 478, in get_detection_ros_client
+    _detection_ros_client = DetectionROSClient()
+  File "/home/min/test/EfficientNav/efficientnav.py", line 427, in __init__
+    raise RuntimeError(
+RuntimeError: efficientnav_interfaces.srv.DetectObjects could not be imported. source /home/min/DINO_ws/install/setup.bash before running EfficientNav.

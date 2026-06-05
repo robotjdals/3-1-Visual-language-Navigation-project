@@ -1,0 +1,100 @@
+[EfficientNav] running file: /home/min/test/EfficientNav/efficientnav.py
+[EfficientNav] units module: /home/min/test/EfficientNav/units.py
+[EfficientNav] planner model: /home/min/test/models/InternVL3-1B
+[EfficientNav] H2O cache: enabled=False budget=2048 recent=256 heavy=256 protected_prefix=0
+FlashAttention2 is not installed.
+[AI2-THOR WARNING] There has been an update to ProcTHOR-10K that must be used with AI2-THOR version 5.0+. To use the new version of ProcTHOR-10K, please update AI2-THOR to version 5.0+ by running:
+    pip install --upgrade ai2thor
+Alternatively, to downgrade to the old version of ProcTHOR-10K, run:
+   prior.load_dataset("procthor-10k", revision="ab3cacd0fc17754d4c080a3fd50b18395fae8647")
+Loading train:   0%|          | 0/10000 [00:00<?, ?it/s]Loading train:  10%|█         | 1022/10000 [00:00<00:00, 10218.62it/s]Loading train:  21%|██        | 2108/10000 [00:00<00:00, 10591.54it/s]Loading train:  32%|███▏      | 3226/10000 [00:00<00:00, 10857.46it/s]Loading train:  43%|████▎     | 4312/10000 [00:00<00:00, 10570.07it/s]Loading train:  54%|█████▎    | 5371/10000 [00:00<00:00, 10330.76it/s]Loading train:  64%|██████▍   | 6406/10000 [00:00<00:00, 10106.52it/s]Loading train:  74%|███████▍  | 7418/10000 [00:00<00:00, 10093.92it/s]Loading train:  84%|████████▍ | 8444/10000 [00:00<00:00, 10142.90it/s]Loading train:  95%|█████████▌| 9532/10000 [00:00<00:00, 10366.90it/s]Loading train: 100%|██████████| 10000/10000 [00:00<00:00, 10354.11it/s]
+Loading val:   0%|          | 0/1000 [00:00<?, ?it/s]Loading val: 100%|██████████| 1000/1000 [00:00<00:00, 10950.36it/s]
+Loading test:   0%|          | 0/1000 [00:00<?, ?it/s]Loading test: 100%|██████████| 1000/1000 [00:00<00:00, 10890.87it/s]
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+Setting `pad_token_id` to `eos_token_id`:151645 for open-end generation.
+[Debug] selectable goal names count=35 sample=['apple', 'bowl', 'cellphone', 'chair', 'countertop', 'creditcard', 'cup', 'diningtable', 'doorway', 'egg']
+[Debug] using requested target object=tv
+[Debug] reachable_positions=992 candidate_objects_for_tv=2
+[Debug] starting independent environment episode=1/1
+[Debug] experiment setup: seed=7 goal_instance_index=random start_index=random start_rotation=90.0 start_point=(6.750, 0.901, 9.000)
+[Timing] pathfinder goal-distance elapsed=1.573s found=True
+real_distance:8.528174593052025
+[Debug] observation rotation: angle=0 pause=0.25s
+[Debug] observation rotation: angle=90 pause=0.25s
+[Debug] observation rotation: angle=180 pause=0.25s
+[Debug] observation rotation: angle=270 pause=0.25s
+[Debug] calling detection service: position_id=big+0+0 angle=0 prompt='tv . laptop . window .'
+[Debug] received detection service result: position_id=big+0+0 angle=0
+[Debug] calling detection service: position_id=big+0+0 angle=90 prompt='tv . table . chair .'
+[Debug] received detection service result: position_id=big+0+0 angle=90
+[Debug] calling detection service: position_id=big+0+0 angle=180 prompt='tv . sofa . desk . lamp .'
+[Debug] received detection service result: position_id=big+0+0 angle=180
+[Debug] calling detection service: position_id=big+0+0 angle=270 prompt='tv . tv stand . sofa .'
+[Debug] received detection service result: position_id=big+0+0 angle=270
+[Debug] box_info_list_sum: [[{'label': 'window', 'box': [9, 261, 446, 826]}, {'label': 'laptop', 'box': [824, 749, 1023, 962]}], [{'label': 'chair', 'box': [716, 771, 1023, 1023]}, {'label': 'table', 'box': [0, 761, 699, 1023]}], [{'label': 'lamp', 'box': [81, 422, 273, 1007]}, {'label': 'sofa', 'box': [973, 620, 1023, 785]}, {'label': 'desk', 'box': [410, 567, 552, 640]}], [{'label': 'sofa', 'box': [0, 560, 724, 805]}, {'label': 'tv stand', 'box': [298, 576, 421, 644]}, {'label': 'tv', 'box': [319, 523, 408, 584]}]]
+window
+laptop
+chair
+statue
+floorlamp
+sofa
+chair
+tv
+[Debug] preserving goal candidate: label=tv angle=270 obj_id=46 visible_ratio=0.005062 bbox=89x60 box_match=0.9667 detection_bbox=89x61
+[Debug] max_similar_objs_list: [[('window', 0, 65, 1.0, 'window', array([ 5.970752 ,  1.4993188, 10.508999 ], dtype=float32))], [('laptop', 0, 29, 1.0, 'laptop', array([ 7.6354885,  0.9170662, 10.0352125], dtype=float32))], [('chair', 90, 3, 1.0, 'chair', array([7.860443  , 0.38061038, 8.041011  ], dtype=float32))], [('statue', 90, 44, 0.627722442150116, 'statue', array([7.630681  , 0.96019053, 9.146948  ], dtype=float32))], [('floorlamp', 180, 22, 0.7215485572814941, 'floorlamp', array([7.8611965 , 0.92367643, 7.275919  ], dtype=float32))], [('sofa', 180, 41, 1.0, 'sofa', array([3.4744134 , 0.50392896, 7.191756  ], dtype=float32))], [('chair', 180, 8, 0.6835057735443115, 'chair', array([7.112501  , 0.49567136, 2.7322915 ], dtype=float32))], [('tv', 270, 46, 0.8397394418716431, 'tv', array([0.47341067, 1.0578212 , 7.1917553 ], dtype=float32))]]
+[Debug] empty_position: [3]
+Place 0 : {
+    "Angle": 0,
+    "Objects": [
+        "window",
+        "laptop"
+    ]
+}{
+    "Angle": 90,
+    "Objects": [
+        "chair",
+        "statue"
+    ]
+}{
+    "Angle": 180,
+    "Objects": [
+        "sofa",
+        "chair",
+        "floorlamp",
+        "chair"
+    ]
+}{
+    "Angle": 270,
+    "Objects": [
+        "tv"
+    ]
+}
+[Debug] allowed planner objects: ['tv', 'window', 'sofa', 'laptop', 'statue', 'chair', 'floorlamp']
+[Debug] allowed planner objects by place: {0: ['tv', 'window', 'sofa', 'laptop', 'chair', 'floorlamp', 'statue']}
+[Debug] bypassing planner because goal is already observed: {"Place": 0, "Angle": 270, "Objects": ["tv"]}
+{"Place": 0, "Angle": 270, "Objects": ["tv"]}
+[Debug] planner selected: place=0, angle=270, objects=['tv']
+last_key:[]
+[Debug] allowed_targets_by_place[0] candidates: [('tv', 270, 46, 0.8397394418716431, 'tv', array([0.47341067, 1.0578212 , 7.1917553 ], dtype=float32)), ('window', 0, 65, 1.0, 'window', array([ 5.970752 ,  1.4993188, 10.508999 ], dtype=float32)), ('sofa', 180, 41, 1.0, 'sofa', array([3.4744134 , 0.50392896, 7.191756  ], dtype=float32)), ('laptop', 0, 29, 1.0, 'laptop', array([ 7.6354885,  0.9170662, 10.0352125], dtype=float32)), ('chair', 90, 3, 1.0, 'chair', array([7.860443  , 0.38061038, 8.041011  ], dtype=float32)), ('floorlamp', 180, 22, 0.7215485572814941, 'floorlamp', array([7.8611965 , 0.92367643, 7.275919  ], dtype=float32)), ('chair', 180, 8, 0.6835057735443115, 'chair', array([7.112501  , 0.49567136, 2.7322915 ], dtype=float32)), ('statue', 90, 44, 0.627722442150116, 'statue', array([7.630681  , 0.96019053, 9.146948  ], dtype=float32))]
+[Debug] resolved target tuple: ('tv', 270, 46, 0.8397394418716431, 'tv', array([0.47341067, 1.0578212 , 7.1917553 ], dtype=float32)) from representative place 0
+[Debug] resolved source place: 0 for representative place 0
+0
+final_goal:tv,sub_goal:tv,place:0,trajectory: tv in Place 0.
+sub_target_id:46
+target:tv
+final_goal:tv
+final_length:0
+[Timing] pathfinder to-subgoal elapsed=1.636s found=True
+[Debug] sub-goal visible on screen: label=tv ratio=0.007476 bbox=114x76
+[Debug] calling detection service: position_id=goal-visible-1-0-5 angle=225 prompt='tv .'
+[Debug] received detection service result: position_id=goal-visible-1-0-5 angle=225
+[Debug] final goal visible on screen: label=tv ratio=0.010409 semantic_bbox=138x88 rgb_bbox=138x90
+[Debug] saved final goal bbox: tmp/navigation_images/final_goal_visible_step_5.png
+[Debug] final goal detected; approaching GT coordinates before stopping
+[Timing] pathfinder final-approach elapsed=1.633s found=True
+[Debug] close enough to final goal coordinates: label=tv distance=1.453
+[Timing] episode elapsed=22.094s sr=1 spl=1.0000 final_length=7.4675
+[Timing] val_auto episode total elapsed=22.094s goal=tv sr=1 spl=1.0000 completed_eval_episodes=1/1
+[Debug] episode success: final_goal=tv sr=1 spl=1.0000 final_length=7.4675
