@@ -52,7 +52,9 @@ try:
         build_attention_heavy_scores,
         h2o_config,
         h2o_enabled,
+        h2o_protected_prefix_outside_budget,
         merge_heavy_scores,
+        protected_suffix_from_marker,
         trim_heavy_scores,
     )
 except ImportError:
@@ -61,7 +63,9 @@ except ImportError:
         build_attention_heavy_scores,
         h2o_config,
         h2o_enabled,
+        h2o_protected_prefix_outside_budget,
         merge_heavy_scores,
+        protected_suffix_from_marker,
         trim_heavy_scores,
     )
 import units
@@ -108,7 +112,8 @@ print(
     f"budget={h2o_budget} "
     f"recent={h2o_recent_size} "
     f"heavy={h2o_heavy_size} "
-    f"protected_prefix={h2o_protected_prefix}"
+    f"protected_prefix={h2o_protected_prefix} "
+    f"prefix_outside_budget={h2o_protected_prefix_outside_budget()}"
 )
 internvl_mode = "internvl" in planner_model_path.lower()
 planner_processor = None
@@ -269,7 +274,7 @@ hebing_threshould = 0.001
 node_pruning_num = 4
 object_describe_multi_time = False ##
 through_door = True ##
-use_traj = False #
+use_traj = os.environ.get("EFFICIENTNAV_USE_TRAJECTORY_PROMPT", "1") == "1"
 pay_attention_to_door = True ##
 use_real_semetic = True ##
 early_stop  = True #
@@ -1697,6 +1702,32 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
     return max_similar_objs_list,empty_position
 
 
+def split_trajectory_for_h2o(trajectory_text, recent_count=None):
+    if recent_count is None:
+        recent_count = int(os.environ.get("EFFICIENTNAV_H2O_RECENT_TRAJECTORY_COUNT", "5"))
+    entries = [
+        entry.strip()
+        for entry in str(trajectory_text or "").split(".")
+        if entry.strip()
+    ]
+    if not entries:
+        return "", ""
+    recent_count = max(0, int(recent_count))
+    if recent_count == 0:
+        old_entries = entries
+        recent_entries = []
+    else:
+        old_entries = entries[:-recent_count]
+        recent_entries = entries[-recent_count:]
+    old_text = ". ".join(old_entries)
+    recent_text = ". ".join(recent_entries)
+    if old_text:
+        old_text += "."
+    if recent_text:
+        recent_text += "."
+    return old_text, recent_text
+
+
 def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_objects=None,allowed_objects_by_place=None):
     planning_start_time = time.perf_counter()
     effective_use_kv_cache = use_kv_cache and place_describe_cache is not None
@@ -1710,9 +1741,35 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             except Exception as exc:
                 print(f"[Debug] KV cache conversion failed, falling back to non-KV planning: {exc}")
                 effective_use_kv_cache = False
-    input_text = 'The above is a description of different places in different angles in the environment.'
-    input_text+= f'Your can get to any place described in the json data. '
-    input_text+= f'Your goal is to find the {final_goal}. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target.'
+    old_trajectory, recent_trajectory = split_trajectory_for_h2o(trajectory)
+    planner_context_parts = []
+    if use_traj and old_trajectory:
+        planner_context_parts.append(
+            "<|trajectory|>\n"
+            f"Older traveled objects: {old_trajectory}\n"
+            "<|/trajectory|>"
+        )
+    if allowed_objects_by_place:
+        per_place_text = []
+        for place_idx, labels in allowed_objects_by_place.items():
+            if labels:
+                per_place_text.append(f'Place {place_idx}: {", ".join(labels)}')
+        if per_place_text:
+            planner_context_parts.append(
+                "<|planner_context|>\n"
+                "Valid choosable objects by place are: "
+                + " ; ".join(per_place_text)
+                + ". The Objects field must contain exactly one object from the chosen place list.\n"
+                "<|/planner_context|>"
+            )
+    planner_context_text = "\n".join(part for part in planner_context_parts if part)
+    if planner_context_text:
+        planner_context_text += "\n"
+
+    input_text = '<|instruction_core|>\n'
+    input_text += 'The above is a description of different places in different angles in the environment.'
+    input_text += f'Your can get to any place described in the json data. '
+    input_text += f'Your goal is to find the {final_goal}. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target.'
     if allowed_objects:
         allowed_objects_text = ', '.join(allowed_objects)
         input_text += f' You must choose an object only from this allowed list: {allowed_objects_text}.'
@@ -1720,15 +1777,10 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             input_text += f' Since {final_goal} is in the allowed list, choose {final_goal}.'
         input_text += ' Do not output any object name that is not in the allowed list.'
     if allowed_objects_by_place:
-        per_place_text = []
-        for place_idx, labels in allowed_objects_by_place.items():
-            if labels:
-                per_place_text.append(f'Place {place_idx}: {", ".join(labels)}')
-        if per_place_text:
-            input_text += ' Valid choosable objects by place are: ' + ' ; '.join(per_place_text) + '.'
-            input_text += ' The Objects field must contain exactly one object from the chosen place list.'
+        input_text += ' Use the provided valid objects-by-place context and choose exactly one object from the selected place list.'
     if use_traj:
-        input_text+= f'Here is the objects that you have traveled to before: {trajectory} Do not choose the objects that you have traveled to before as the target. '
+        protected_trajectory = recent_trajectory or trajectory
+        input_text+= f'Here are the most recent objects that you have traveled to before: {protected_trajectory} Do not choose the objects that you have traveled to before as the target. '
     if pay_attention_to_door:
         if use_real_semetic:
             input_text+='Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target. '
@@ -1736,9 +1788,10 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             input_text+='Note that you can travel to entrance or door frame to other spaces if there are no clear evidence to choose the target.'
     input_text+=''' Return exactly one JSON object by referring to the following template.
             {"Place": x, "Angle": x, "Objects": ["xxxx"] }
-            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.'''
+            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.
+<|/instruction_core|>'''
     if not effective_use_kv_cache:
-        prompt2 = build_chat_prompt(f"{place_describe}\n{input_text}")
+        prompt2 = build_chat_prompt(f"{place_describe}\n{planner_context_text}{input_text}")
         inputs2 = planner_text_processor(prompt2, padding=True, return_tensors="pt").to(device0)
         with torch.no_grad():
             if internvl_mode:
@@ -1763,8 +1816,17 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                 )
     else:
         text_model = getattr(planner_model, "language_model", planner_model)
-        prompt_pruning = build_chat_prompt(input_text)
+        protected_prompt_pruning = build_chat_prompt(input_text)
+        prompt_pruning = build_chat_prompt(f"{planner_context_text}{input_text}") if planner_context_text else protected_prompt_pruning
         new_input_pruning = planner_text_processor(prompt_pruning, padding=True, return_tensors="pt").to(device0)
+        prompt_pruning_token_count = protected_suffix_from_marker(
+            planner_text_processor,
+            new_input_pruning["input_ids"][0],
+            "<|instruction_core|>",
+        )
+        if prompt_pruning_token_count is None:
+            protected_input_pruning = planner_text_processor(protected_prompt_pruning, padding=True, return_tensors="pt").to(device0)
+            prompt_pruning_token_count = int(protected_input_pruning["input_ids"].shape[1])
         generated_tokens = []
         h2o_decode_step = 0
         h2o_heavy_scores = None
@@ -1791,6 +1853,7 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                     legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
                         legacy_cache,
                         heavy_scores=h2o_heavy_scores,
+                        protected_suffix=prompt_pruning_token_count + h2o_decode_step,
                         label="decode",
                     )
                     if h2o_stats.get("applied"):
@@ -1805,6 +1868,8 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                                 f"kept_recent={h2o_stats.get('kept_recent')} "
                                 f"kept_heavy={h2o_stats.get('kept_heavy')} "
                                 f"protected_prefix={h2o_stats.get('protected_prefix')} "
+                                f"protected_suffix={h2o_stats.get('protected_suffix')} "
+                                f"prefix_outside_budget={h2o_stats.get('protected_prefix_outside_budget')} "
                                 f"budget={h2o_stats.get('budget')}"
                             )
                 except Exception as exc:
@@ -1917,6 +1982,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
 
     sub_goal_history = []
     final_length = 0
+    trajectory_length = 0.0
 
 
     last_target_position = agent_state.position
@@ -3006,6 +3072,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                 if episode_success:
                     final_length += total_distance_traveled
                     length_this_epoch += total_distance_traveled
+                    trajectory_length += total_distance_traveled
                     if approach_visible_goal_with_gt and visible_goal_target_position is not None:
                         print("[Debug] final goal detected; approaching GT coordinates before stopping")
                         approach_stop_distance = 1.5
@@ -3054,6 +3121,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                                 approach_previous_position = approach_current_position.copy()
                             final_length += approach_distance_traveled
                             length_this_epoch += approach_distance_traveled
+                            trajectory_length += approach_distance_traveled
                         else:
                             print("[Debug] no path found for final goal close approach")
                     else:
@@ -3074,6 +3142,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                             total_distance_traveled += 0.25
                 final_length += total_distance_traveled
                 length_this_epoch += total_distance_traveled
+                trajectory_length += total_distance_traveled
             else:
                 print('No path found')
         if not(last_answer == llava_answer2 and use_pruning):
@@ -3086,7 +3155,8 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
     episode_elapsed = time.perf_counter() - episode_start_time
     print(
         f"[Timing] episode elapsed={episode_elapsed:.3f}s sr={sr} "
-        f"spl={spl:.4f} final_length={final_length:.4f}"
+        f"spl={spl:.4f} final_length={final_length:.4f} "
+        f"trajectory_length={trajectory_length:.4f}"
     )
     return sr,spl,real_distance,final_length
 
