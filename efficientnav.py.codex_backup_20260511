@@ -50,9 +50,13 @@ try:
     from h2o_cache import (
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_config,
         h2o_enabled,
         h2o_protected_prefix_outside_budget,
+        h2o_use_attention_scores,
         merge_heavy_scores,
         protected_suffix_from_marker,
         trim_heavy_scores,
@@ -61,9 +65,13 @@ except ImportError:
     from .h2o_cache import (
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_config,
         h2o_enabled,
         h2o_protected_prefix_outside_budget,
+        h2o_use_attention_scores,
         merge_heavy_scores,
         protected_suffix_from_marker,
         trim_heavy_scores,
@@ -1227,8 +1235,8 @@ def get_goal_candidate_thresholds(goal_name):
     """Return semantic/RGB thresholds used to preserve goal candidates in get_objects()."""
     size_class = get_goal_size_class(goal_name)
     if size_class == "small":
-        visible_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_VISIBLE_RATIO", 0.00015)
-        min_bbox_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_MIN_BBOX_SIDE", 8)
+        visible_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_VISIBLE_RATIO", 0.0001)
+        min_bbox_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_MIN_BBOX_SIDE", 6)
         box_match_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_BOX_MATCH_RATIO", 0.005)
         detection_min_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_DETECTION_MIN_SIDE", 2)
     elif size_class == "large":
@@ -1749,8 +1757,8 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             f"Older traveled objects: {old_trajectory}\n"
             "<|/trajectory|>"
         )
+    per_place_text = []
     if allowed_objects_by_place:
-        per_place_text = []
         for place_idx, labels in allowed_objects_by_place.items():
             if labels:
                 per_place_text.append(f'Place {place_idx}: {", ".join(labels)}')
@@ -1767,7 +1775,7 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
         planner_context_text += "\n"
 
     input_text = '<|instruction_core|>\n'
-    input_text += 'The above is a description of different places in different angles in the environment.'
+    input_text += 'The above is a description of different places in different angles in the environment. '
     input_text += f'Your can get to any place described in the json data. '
     input_text += f'Your goal is to find the {final_goal}. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target.'
     if allowed_objects:
@@ -1780,12 +1788,35 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
         input_text += ' Use the provided valid objects-by-place context and choose exactly one object from the selected place list.'
     if use_traj:
         protected_trajectory = recent_trajectory or trajectory
-        input_text+= f'Here are the most recent objects that you have traveled to before: {protected_trajectory} Do not choose the objects that you have traveled to before as the target. '
+        input_text += f' Here are the most recent objects that you have traveled to before: {protected_trajectory} Do not choose the objects that you have traveled to before as the target. '
     if pay_attention_to_door:
         if use_real_semetic:
-            input_text+='Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target. '
+            input_text += ' Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target. '
         else:
-            input_text+='Note that you can travel to entrance or door frame to other spaces if there are no clear evidence to choose the target.'
+            input_text += ' Note that you can travel to entrance or door frame to other spaces if there are no clear evidence to choose the target. '
+    decision_context_lines = [f"Final goal: {final_goal}."]
+    if per_place_text:
+        decision_context_lines.append(
+            "Valid objects by place: "
+            + " ; ".join(per_place_text)
+            + "."
+        )
+    if allowed_objects:
+        decision_context_lines.append(
+            "Allowed object names: "
+            + ", ".join(allowed_objects)
+            + "."
+        )
+    if use_traj:
+        decision_context_lines.append(
+            "Most recent traveled objects to avoid: "
+            + (recent_trajectory or trajectory or "none")
+        )
+    input_text += (
+        "\n<|decision_context|>\n"
+        + "\n".join(decision_context_lines)
+        + "\n<|/decision_context|>\n"
+    )
     input_text+=''' Return exactly one JSON object by referring to the following template.
             {"Place": x, "Angle": x, "Objects": ["xxxx"] }
             If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.
@@ -1822,14 +1853,33 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
         prompt_pruning_token_count = protected_suffix_from_marker(
             planner_text_processor,
             new_input_pruning["input_ids"][0],
-            "<|instruction_core|>",
+            "<|decision_context|>",
         )
+        if prompt_pruning_token_count is None:
+            prompt_pruning_token_count = protected_suffix_from_marker(
+                planner_text_processor,
+                new_input_pruning["input_ids"][0],
+                "<|instruction_core|>",
+            )
         if prompt_pruning_token_count is None:
             protected_input_pruning = planner_text_processor(protected_prompt_pruning, padding=True, return_tensors="pt").to(device0)
             prompt_pruning_token_count = int(protected_input_pruning["input_ids"].shape[1])
         generated_tokens = []
         h2o_decode_step = 0
         h2o_heavy_scores = None
+        if h2o_enabled():
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_goal_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0], final_goal),
+            )
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_segment_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0]),
+            )
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_semantic_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0], final_goal),
+            )
         eos_token_ids = get_planner_eos_token_ids()
         for _ in range(48):
             with torch.no_grad():
@@ -1837,7 +1887,7 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                     input_ids=new_input_pruning['input_ids'],
                     past_key_values=place_describe_cache,
                     use_cache=True,
-                    output_attentions=h2o_enabled(),
+                    output_attentions=h2o_enabled() and h2o_use_attention_scores(),
                 )
             next_token = outputs.logits.argmax(dim=-1)[:, -1:]
             next_token_id = int(next_token[0][0])
@@ -1847,7 +1897,19 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             place_describe_cache = outputs.past_key_values
             if h2o_enabled():
                 try:
-                    attention_scores = build_attention_heavy_scores(getattr(outputs, "attentions", None))
+                    if h2o_heavy_scores is not None:
+                        h2o_heavy_scores = torch.cat(
+                            [
+                                h2o_heavy_scores.detach().flatten(),
+                                torch.zeros(1, dtype=h2o_heavy_scores.dtype, device=h2o_heavy_scores.device),
+                            ],
+                            dim=0,
+                        )
+                    attention_scores = (
+                        build_attention_heavy_scores(getattr(outputs, "attentions", None))
+                        if h2o_use_attention_scores()
+                        else None
+                    )
                     h2o_heavy_scores = merge_heavy_scores(h2o_heavy_scores, attention_scores)
                     legacy_cache = convert_runtime_kv_to_legacy_cache(place_describe_cache)
                     legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
