@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.8098179697990417
+Total Episodes: 1
+Total Length: 13.10660171508789
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.8098179697990417
+Hard Episodes: 1
+Hard Length: 13.10660171508789
+SR eposion: [0]
+SR subgoal: ['fridge']
+num_node: 5

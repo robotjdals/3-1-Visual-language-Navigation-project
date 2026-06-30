@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.49979153275489807
+Total Episodes: 1
+Total Length: 24.960153579711914
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.49979153275489807
+Hard Episodes: 1
+Hard Length: 24.960153579711914
+SR eposion: [0]
+SR subgoal: ['apple']
+num_node: 7

@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.3674389123916626
+Total Episodes: 1
+Total Length: 48.54911804199219
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.3674389123916626
+Hard Episodes: 1
+Hard Length: 48.54911804199219
+SR eposion: [0]
+SR subgoal: ['floorlamp']
+num_node: 10

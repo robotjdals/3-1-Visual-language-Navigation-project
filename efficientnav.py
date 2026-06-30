@@ -50,18 +50,30 @@ try:
     from h2o_cache import (
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_config,
         h2o_enabled,
+        h2o_protected_prefix_outside_budget,
+        h2o_use_attention_scores,
         merge_heavy_scores,
+        protected_suffix_from_marker,
         trim_heavy_scores,
     )
 except ImportError:
     from .h2o_cache import (
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
+        build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_config,
         h2o_enabled,
+        h2o_protected_prefix_outside_budget,
+        h2o_use_attention_scores,
         merge_heavy_scores,
+        protected_suffix_from_marker,
         trim_heavy_scores,
     )
 import units
@@ -108,7 +120,8 @@ print(
     f"budget={h2o_budget} "
     f"recent={h2o_recent_size} "
     f"heavy={h2o_heavy_size} "
-    f"protected_prefix={h2o_protected_prefix}"
+    f"protected_prefix={h2o_protected_prefix} "
+    f"prefix_outside_budget={h2o_protected_prefix_outside_budget()}"
 )
 internvl_mode = "internvl" in planner_model_path.lower()
 planner_processor = None
@@ -269,7 +282,7 @@ hebing_threshould = 0.001
 node_pruning_num = 4
 object_describe_multi_time = False ##
 through_door = True ##
-use_traj = False #
+use_traj = os.environ.get("EFFICIENTNAV_USE_TRAJECTORY_PROMPT", "1") == "1"
 pay_attention_to_door = True ##
 use_real_semetic = True ##
 early_stop  = True #
@@ -277,8 +290,9 @@ directly_find =True ##
 use_kv_cache = os.environ.get("EFFICIENTNAV_USE_KV_CACHE", "1") == "1"
 use_pruning = True
 only_llm_baseline = os.environ.get("EFFICIENTNAV_ONLY_LLM_BASELINE", "0") == "1"
+single_object_bypass = os.environ.get("EFFICIENTNAV_SINGLE_OBJECT_BYPASS", "0") == "1"
 approach_visible_goal_with_gt = os.environ.get(
-    "EFFICIENTNAV_APPROACH_VISIBLE_GOAL_WITH_GT", "1"
+    "EFFICIENTNAV_APPROACH_VISIBLE_GOAL_WITH_GT", "0"
 ) == "1"
 
 num_episode = int(os.environ.get("EFFICIENTNAV_NUM_HOUSES", "20"))
@@ -305,10 +319,62 @@ structural_subgoal_tokens = {
     'ceiling', 'ceilings', 'tile', 'tiles', 'tiled', 'mosaic', 'pattern',
     'shadow', 'shadows'
 }
+small_object_labels = {
+    'apple', 'tomato', 'cup', 'bowl', 'spoon', 'fork', 'knife', 'plate',
+    'remote', 'remotecontrol', 'watch', 'phone', 'cellphone', 'tablet',
+    'book', 'vase', 'kettle', 'mug', 'bottle', 'spraybottle'
+}
+large_object_labels = {
+    'wall', 'floor', 'ceiling', 'window', 'door', 'doorway', 'door frame',
+    'sofa', 'bed', 'chair', 'table', 'desk', 'countertop', 'cabinet',
+    'fridge', 'refrigerator', 'tv', 'painting', 'picture', 'picture frame'
+}
 internvl_max_num = int(os.environ.get("EFFICIENTNAV_INTERNVL_MAX_NUM", "6"))
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def get_object_scale_class(label):
+    normalized_label = canonical_goal_name(label)
+    if normalized_label in small_object_labels:
+        return "small"
+    if normalized_label in large_object_labels:
+        return "large"
+    return "medium"
+
+
+def adjust_visibility_thresholds_for_object(label, visible_ratio_threshold, min_bbox_side_px):
+    scale_class = get_object_scale_class(label)
+    if scale_class == "small":
+        return (
+            float(visible_ratio_threshold) * 0.6,
+            max(8, int(round(float(min_bbox_side_px) * 0.65))),
+        )
+    if scale_class == "large":
+        return (
+            float(visible_ratio_threshold) * 1.2,
+            max(1, int(round(float(min_bbox_side_px) * 1.1))),
+        )
+    return float(visible_ratio_threshold), int(min_bbox_side_px)
+
+
+def adjust_box_match_threshold_for_object(label, box_match_threshold):
+    scale_class = get_object_scale_class(label)
+    if scale_class == "small":
+        return max(0.005, float(box_match_threshold) * 0.75)
+    if scale_class == "large":
+        return min(0.5, float(box_match_threshold) * 1.1)
+    return float(box_match_threshold)
+
+
+def adjust_detection_min_side_for_object(label, min_side_px):
+    scale_class = get_object_scale_class(label)
+    if scale_class == "small":
+        return max(3, int(round(float(min_side_px) * 0.75)))
+    if scale_class == "large":
+        return max(1, int(round(float(min_side_px) * 1.2)))
+    return int(min_side_px)
 
 
 def is_preferred_planner_label(label, final_goal=None):
@@ -1091,9 +1157,111 @@ def is_goal_label_match(goal_name, detected_label):
     return canonical_goal_name(detected_label) == canonical_goal_name(goal_name)
 
 
+SMALL_GOAL_LABELS = {
+    "laptop", "phone", "cellphone", "tablet", "cup", "remote", "remotecontrol",
+    "book", "bottle", "mug", "kettle", "spraybottle", "box", "statue", "watch"
+}
+
+LARGE_GOAL_LABELS = {
+    "bed", "sofa", "chair", "armchair", "toilet",
+    "refrigerator", "fridge", "cabinet", "table", "diningtable", "desk", "tv", "television"
+}
+
+DEFAULT_GOAL_LABELS = {
+    "plant", "floorlamp", "lamp", "desklamp"
+}
+
+
+def _get_env_float(name, default_value):
+    try:
+        return float(os.environ.get(name, str(default_value)))
+    except (TypeError, ValueError):
+        print(f"[Debug] invalid float env {name}={os.environ.get(name)!r}; using default={default_value}")
+        return float(default_value)
+
+
+def _get_env_int(name, default_value):
+    try:
+        return int(os.environ.get(name, str(default_value)))
+    except (TypeError, ValueError):
+        print(f"[Debug] invalid int env {name}={os.environ.get(name)!r}; using default={default_value}")
+        return int(default_value)
+
+
+def get_goal_size_class(goal_name):
+    normalized_goal = canonical_goal_name(str(goal_name or "").strip().lower())
+    if normalized_goal in SMALL_GOAL_LABELS:
+        return "small"
+    if normalized_goal in LARGE_GOAL_LABELS:
+        return "large"
+    if normalized_goal in DEFAULT_GOAL_LABELS:
+        return "default"
+    return "default"
+
+
+def get_goal_success_thresholds(goal_name):
+    """Return semantic success and RGB-detector thresholds for a final goal."""
+    size_class = get_goal_size_class(goal_name)
+    if size_class == "small":
+        semantic_visible_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_VISIBLE_RATIO", 0.0003)
+        semantic_min_bbox_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_MIN_BBOX_SIDE", 12)
+        rgb_min_bbox_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_RGB_MIN_BBOX_SIDE", 16)
+    elif size_class == "large":
+        semantic_visible_ratio = _get_env_float(
+            "EFFICIENTNAV_LARGE_GOAL_VISIBLE_RATIO",
+            _get_env_float("EFFICIENTNAV_GOAL_SUCCESS_VISIBLE_RATIO_THRESHOLD", 0.008),
+        )
+        semantic_min_bbox_side = _get_env_int(
+            "EFFICIENTNAV_LARGE_GOAL_MIN_BBOX_SIDE",
+            _get_env_int("EFFICIENTNAV_GOAL_SUCCESS_MIN_BBOX_SIDE_PX", 80),
+        )
+        rgb_min_bbox_side = _get_env_int(
+            "EFFICIENTNAV_LARGE_GOAL_RGB_MIN_BBOX_SIDE",
+            _get_env_int("EFFICIENTNAV_MIN_DETECTED_GOAL_BBOX_SIDE_PX", 80),
+        )
+    else:
+        semantic_visible_ratio = _get_env_float("EFFICIENTNAV_DEFAULT_GOAL_VISIBLE_RATIO", 0.002)
+        semantic_min_bbox_side = _get_env_int("EFFICIENTNAV_DEFAULT_GOAL_MIN_BBOX_SIDE", 32)
+        rgb_min_bbox_side = _get_env_int("EFFICIENTNAV_DEFAULT_GOAL_RGB_MIN_BBOX_SIDE", 40)
+    return {
+        "size_class": size_class,
+        "semantic_visible_ratio": semantic_visible_ratio,
+        "semantic_min_bbox_side": semantic_min_bbox_side,
+        "rgb_min_bbox_side": rgb_min_bbox_side,
+    }
+
+
+def get_goal_candidate_thresholds(goal_name):
+    """Return semantic/RGB thresholds used to preserve goal candidates in get_objects()."""
+    size_class = get_goal_size_class(goal_name)
+    if size_class == "small":
+        visible_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_VISIBLE_RATIO", 0.0001)
+        min_bbox_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_MIN_BBOX_SIDE", 6)
+        box_match_ratio = _get_env_float("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_BOX_MATCH_RATIO", 0.005)
+        detection_min_side = _get_env_int("EFFICIENTNAV_SMALL_GOAL_CANDIDATE_DETECTION_MIN_SIDE", 2)
+    elif size_class == "large":
+        visible_ratio = _get_env_float("EFFICIENTNAV_LARGE_GOAL_CANDIDATE_VISIBLE_RATIO", 0.001)
+        min_bbox_side = _get_env_int("EFFICIENTNAV_LARGE_GOAL_CANDIDATE_MIN_BBOX_SIDE", 24)
+        box_match_ratio = _get_env_float("EFFICIENTNAV_LARGE_GOAL_CANDIDATE_BOX_MATCH_RATIO", 0.02)
+        detection_min_side = _get_env_int("EFFICIENTNAV_LARGE_GOAL_CANDIDATE_DETECTION_MIN_SIDE", 8)
+    else:
+        visible_ratio = _get_env_float("EFFICIENTNAV_DEFAULT_GOAL_CANDIDATE_VISIBLE_RATIO", 0.0005)
+        min_bbox_side = _get_env_int("EFFICIENTNAV_DEFAULT_GOAL_CANDIDATE_MIN_BBOX_SIDE", 16)
+        box_match_ratio = _get_env_float("EFFICIENTNAV_DEFAULT_GOAL_CANDIDATE_BOX_MATCH_RATIO", 0.01)
+        detection_min_side = _get_env_int("EFFICIENTNAV_DEFAULT_GOAL_CANDIDATE_DETECTION_MIN_SIDE", 3)
+    return {
+        "size_class": size_class,
+        "visible_ratio": visible_ratio,
+        "min_bbox_side": min_bbox_side,
+        "box_match_ratio": box_match_ratio,
+        "detection_min_side": detection_min_side,
+    }
+
+
 def detect_goal_in_current_view(color_image, goal_name, request_id, angle):
     prompt = f"{goal_name.lower()} ."
-    min_detected_goal_bbox_side_px = int(os.environ.get("EFFICIENTNAV_MIN_DETECTED_GOAL_BBOX_SIDE_PX", "64"))
+    goal_thresholds = get_goal_success_thresholds(goal_name)
+    min_detected_goal_bbox_side_px = int(goal_thresholds["rgb_min_bbox_side"])
     if use_ros2_detection:
         ros_client = get_detection_ros_client()
         payload = ros_client.detect_objects(request_id, angle, prompt, color_image.astype(np.uint8))
@@ -1165,6 +1333,16 @@ def convert_runtime_kv_to_legacy_cache(cache_value):
     if hasattr(cache_value, "to_legacy_cache"):
         return cache_value.to_legacy_cache()
     return cache_value
+
+
+def get_kv_cache_seq_len(cache_value):
+    legacy_cache = convert_runtime_kv_to_legacy_cache(cache_value)
+    if not isinstance(legacy_cache, tuple) or not legacy_cache:
+        return None
+    try:
+        return int(legacy_cache[0][0].shape[-2])
+    except Exception:
+        return None
 
 
 def get_observation(images,depth):
@@ -1330,18 +1508,20 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
     grounded_box_match_ratio_threshold = float(
         os.environ.get("EFFICIENTNAV_GROUNDED_BOX_MATCH_RATIO_THRESHOLD", "0.08")
     )
-    goal_candidate_visible_ratio_threshold = float(
-        os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_VISIBLE_RATIO_THRESHOLD", "0.0005")
-    )
-    goal_candidate_min_bbox_side_px = int(
-        os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_MIN_BBOX_SIDE_PX", "16")
-    )
-    goal_candidate_box_match_ratio_threshold = float(
-        os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_BOX_MATCH_RATIO_THRESHOLD", "0.01")
-    )
-    goal_candidate_detection_min_side_px = int(
-        os.environ.get("EFFICIENTNAV_GOAL_CANDIDATE_DETECTION_MIN_SIDE_PX", "3")
-    )
+    goal_candidate_thresholds = get_goal_candidate_thresholds(normalized_final_goal)
+    goal_candidate_visible_ratio_threshold = float(goal_candidate_thresholds["visible_ratio"])
+    goal_candidate_min_bbox_side_px = int(goal_candidate_thresholds["min_bbox_side"])
+    goal_candidate_box_match_ratio_threshold = float(goal_candidate_thresholds["box_match_ratio"])
+    goal_candidate_detection_min_side_px = int(goal_candidate_thresholds["detection_min_side"])
+    if normalized_final_goal is not None:
+        print(
+            f"[Debug] goal candidate thresholds: goal={normalized_final_goal} "
+            f"size_class={goal_candidate_thresholds['size_class']} "
+            f"visible_ratio={goal_candidate_visible_ratio_threshold} "
+            f"min_bbox_side={goal_candidate_min_bbox_side_px} "
+            f"box_match_ratio={goal_candidate_box_match_ratio_threshold} "
+            f"detection_min_side={goal_candidate_detection_min_side_px}"
+        )
     current_position = np.array(topomap.now.position if topomap.now is not None else [0.0, 0.0, 0.0])
     empty_position = []
     for i,(angle_picture, box_info_list) in enumerate(zip(position_looked,box_info_list_sum)):
@@ -1352,6 +1532,32 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
             label = canonical_goal_name(box_info['label'].lower())
             if label in observation_noise_labels:
                 continue
+            label_grounded_visible_ratio_threshold, label_grounded_min_bbox_side_px = (
+                adjust_visibility_thresholds_for_object(
+                    label,
+                    grounded_visible_ratio_threshold,
+                    grounded_min_bbox_side_px,
+                )
+            )
+            label_goal_candidate_visible_ratio_threshold, label_goal_candidate_min_bbox_side_px = (
+                adjust_visibility_thresholds_for_object(
+                    label,
+                    goal_candidate_visible_ratio_threshold,
+                    goal_candidate_min_bbox_side_px,
+                )
+            )
+            label_grounded_box_match_ratio_threshold = adjust_box_match_threshold_for_object(
+                label,
+                grounded_box_match_ratio_threshold,
+            )
+            label_goal_candidate_box_match_ratio_threshold = adjust_box_match_threshold_for_object(
+                label,
+                goal_candidate_box_match_ratio_threshold,
+            )
+            label_goal_candidate_detection_min_side_px = adjust_detection_min_side_for_object(
+                label,
+                goal_candidate_detection_min_side_px,
+            )
             x1, y1, x2, y2 = box_info['box']
             detected_box_width = max(0, int(x2) - int(x1))
             detected_box_height = max(0, int(y2) - int(y1))
@@ -1380,19 +1586,19 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
                     and category_name == normalized_final_goal
                 )
                 visible_threshold = (
-                    goal_candidate_visible_ratio_threshold
+                    label_goal_candidate_visible_ratio_threshold
                     if is_goal_candidate
-                    else grounded_visible_ratio_threshold
+                    else label_grounded_visible_ratio_threshold
                 )
                 min_bbox_side_px = (
-                    goal_candidate_min_bbox_side_px
+                    label_goal_candidate_min_bbox_side_px
                     if is_goal_candidate
-                    else grounded_min_bbox_side_px
+                    else label_grounded_min_bbox_side_px
                 )
                 box_match_threshold = (
-                    goal_candidate_box_match_ratio_threshold
+                    label_goal_candidate_box_match_ratio_threshold
                     if is_goal_candidate
-                    else grounded_box_match_ratio_threshold
+                    else label_grounded_box_match_ratio_threshold
                 )
                 is_clearly_visible, visible_ratio, bbox_width, bbox_height = is_object_clearly_visible(
                     semantic,
@@ -1403,8 +1609,8 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
                 goal_box_overlap_visible = (
                     is_goal_candidate
                     and box_match_ratio >= box_match_threshold
-                    and detected_box_width >= goal_candidate_detection_min_side_px
-                    and detected_box_height >= goal_candidate_detection_min_side_px
+                    and detected_box_width >= label_goal_candidate_detection_min_side_px
+                    and detected_box_height >= label_goal_candidate_detection_min_side_px
                 )
                 if (
                     box_match_ratio < box_match_threshold
@@ -1514,9 +1720,42 @@ def get_objects(topomap,scene,position_looked,box_info_list_sum,semantic_observa
     return max_similar_objs_list,empty_position
 
 
+def split_trajectory_for_h2o(trajectory_text, recent_count=None):
+    if recent_count is None:
+        recent_count = int(os.environ.get("EFFICIENTNAV_H2O_RECENT_TRAJECTORY_COUNT", "5"))
+    entries = [
+        entry.strip()
+        for entry in str(trajectory_text or "").split(".")
+        if entry.strip()
+    ]
+    if not entries:
+        return "", ""
+    recent_count = max(0, int(recent_count))
+    if recent_count == 0:
+        old_entries = entries
+        recent_entries = []
+    else:
+        old_entries = entries[:-recent_count]
+        recent_entries = entries[-recent_count:]
+    old_text = ". ".join(old_entries)
+    recent_text = ". ".join(recent_entries)
+    if old_text:
+        old_text += "."
+    if recent_text:
+        recent_text += "."
+    return old_text, recent_text
+
+
 def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_objects=None,allowed_objects_by_place=None):
     planning_start_time = time.perf_counter()
     effective_use_kv_cache = use_kv_cache and place_describe_cache is not None
+    initial_cache_seq_len = get_kv_cache_seq_len(place_describe_cache)
+    print(
+        f"[Debug] KV cache planning status: requested={use_kv_cache} "
+        f"cache_provided={place_describe_cache is not None} "
+        f"initial_cache_seq={initial_cache_seq_len} "
+        f"will_use={effective_use_kv_cache}"
+    )
     if effective_use_kv_cache and isinstance(place_describe_cache, tuple):
         if DynamicCache is None:
             print("[Debug] DynamicCache unavailable, falling back to non-KV planning")
@@ -1524,12 +1763,43 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
         else:
             try:
                 place_describe_cache = convert_legacy_kv_to_runtime_cache(place_describe_cache)
+                print(
+                    f"[Debug] KV cache converted for decode: "
+                    f"runtime_type={type(place_describe_cache).__name__} "
+                    f"cache_seq={get_kv_cache_seq_len(place_describe_cache)}"
+                )
             except Exception as exc:
                 print(f"[Debug] KV cache conversion failed, falling back to non-KV planning: {exc}")
                 effective_use_kv_cache = False
-    input_text = 'The above is a description of different places in different angles in the environment.'
-    input_text+= f'Your can get to any place described in the json data. '
-    input_text+= f'Your goal is to find the {final_goal}. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target.'
+    old_trajectory, recent_trajectory = split_trajectory_for_h2o(trajectory)
+    planner_context_parts = []
+    if use_traj and old_trajectory:
+        planner_context_parts.append(
+            "<|trajectory|>\n"
+            f"Older traveled objects: {old_trajectory}\n"
+            "<|/trajectory|>"
+        )
+    per_place_text = []
+    if allowed_objects_by_place:
+        for place_idx, labels in allowed_objects_by_place.items():
+            if labels:
+                per_place_text.append(f'Place {place_idx}: {", ".join(labels)}')
+        if per_place_text:
+            planner_context_parts.append(
+                "<|planner_context|>\n"
+                "Valid choosable objects by place are: "
+                + " ; ".join(per_place_text)
+                + ". The Objects field must contain exactly one object from the chosen place list.\n"
+                "<|/planner_context|>"
+            )
+    planner_context_text = "\n".join(part for part in planner_context_parts if part)
+    if planner_context_text:
+        planner_context_text += "\n"
+
+    input_text = '<|instruction_core|>\n'
+    input_text += 'The above is a description of different places in different angles in the environment. '
+    input_text += f'Your can get to any place described in the json data. '
+    input_text += f'Your goal is to find the {final_goal}. Based on the above json data, please choose one specific object to travel to as your target. If your goal is already in the description, please choose it as the target.'
     if allowed_objects:
         allowed_objects_text = ', '.join(allowed_objects)
         input_text += f' You must choose an object only from this allowed list: {allowed_objects_text}.'
@@ -1537,25 +1807,44 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             input_text += f' Since {final_goal} is in the allowed list, choose {final_goal}.'
         input_text += ' Do not output any object name that is not in the allowed list.'
     if allowed_objects_by_place:
-        per_place_text = []
-        for place_idx, labels in allowed_objects_by_place.items():
-            if labels:
-                per_place_text.append(f'Place {place_idx}: {", ".join(labels)}')
-        if per_place_text:
-            input_text += ' Valid choosable objects by place are: ' + ' ; '.join(per_place_text) + '.'
-            input_text += ' The Objects field must contain exactly one object from the chosen place list.'
+        input_text += ' Use the provided valid objects-by-place context and choose exactly one object from the selected place list.'
     if use_traj:
-        input_text+= f'Here is the objects that you have traveled to before: {trajectory} Do not choose the objects that you have traveled to before as the target. '
+        protected_trajectory = recent_trajectory or trajectory
+        input_text += f' Here are the most recent objects that you have traveled to before: {protected_trajectory} Do not choose the objects that you have traveled to before as the target. '
     if pay_attention_to_door:
         if use_real_semetic:
-            input_text+='Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target. '
+            input_text += ' Note that you can travel to door or door frame to other spaces if there are no clear evidence to choose the target. '
         else:
-            input_text+='Note that you can travel to entrance or door frame to other spaces if there are no clear evidence to choose the target.'
+            input_text += ' Note that you can travel to entrance or door frame to other spaces if there are no clear evidence to choose the target. '
+    decision_context_lines = [f"Final goal: {final_goal}."]
+    if per_place_text:
+        decision_context_lines.append(
+            "Valid objects by place: "
+            + " ; ".join(per_place_text)
+            + "."
+        )
+    if allowed_objects:
+        decision_context_lines.append(
+            "Allowed object names: "
+            + ", ".join(allowed_objects)
+            + "."
+        )
+    if use_traj:
+        decision_context_lines.append(
+            "Most recent traveled objects to avoid: "
+            + (recent_trajectory or trajectory or "none")
+        )
+    input_text += (
+        "\n<|decision_context|>\n"
+        + "\n".join(decision_context_lines)
+        + "\n<|/decision_context|>\n"
+    )
     input_text+=''' Return exactly one JSON object by referring to the following template.
             {"Place": x, "Angle": x, "Objects": ["xxxx"] }
-            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.'''
+            If your goal is already in the description, please choose it as the target. You should not output any explanation, markdown, prose, examples, or extra text before or after the JSON. Note that your should choose only one object in one angle of one place in the json data as the target.
+<|/instruction_core|>'''
     if not effective_use_kv_cache:
-        prompt2 = build_chat_prompt(f"{place_describe}\n{input_text}")
+        prompt2 = build_chat_prompt(f"{place_describe}\n{planner_context_text}{input_text}")
         inputs2 = planner_text_processor(prompt2, padding=True, return_tensors="pt").to(device0)
         with torch.no_grad():
             if internvl_mode:
@@ -1580,11 +1869,44 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                 )
     else:
         text_model = getattr(planner_model, "language_model", planner_model)
-        prompt_pruning = build_chat_prompt(input_text)
+        protected_prompt_pruning = build_chat_prompt(input_text)
+        prompt_pruning = build_chat_prompt(f"{planner_context_text}{input_text}") if planner_context_text else protected_prompt_pruning
         new_input_pruning = planner_text_processor(prompt_pruning, padding=True, return_tensors="pt").to(device0)
+        prompt_pruning_token_count = protected_suffix_from_marker(
+            planner_text_processor,
+            new_input_pruning["input_ids"][0],
+            "<|decision_context|>",
+        )
+        if prompt_pruning_token_count is None:
+            prompt_pruning_token_count = protected_suffix_from_marker(
+                planner_text_processor,
+                new_input_pruning["input_ids"][0],
+                "<|instruction_core|>",
+            )
+        if prompt_pruning_token_count is None:
+            protected_input_pruning = planner_text_processor(protected_prompt_pruning, padding=True, return_tensors="pt").to(device0)
+            prompt_pruning_token_count = int(protected_input_pruning["input_ids"].shape[1])
+        print(
+            f"[Debug] KV cache decode input: cache_seq={get_kv_cache_seq_len(place_describe_cache)} "
+            f"suffix_tokens={int(new_input_pruning['input_ids'].shape[1])} "
+            f"protected_suffix={prompt_pruning_token_count}"
+        )
         generated_tokens = []
         h2o_decode_step = 0
         h2o_heavy_scores = None
+        if h2o_enabled():
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_goal_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0], final_goal),
+            )
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_segment_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0]),
+            )
+            h2o_heavy_scores = merge_heavy_scores(
+                h2o_heavy_scores,
+                build_semantic_heavy_scores(planner_text_processor, new_input_pruning["input_ids"][0], final_goal),
+            )
         eos_token_ids = get_planner_eos_token_ids()
         for _ in range(48):
             with torch.no_grad():
@@ -1592,7 +1914,7 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                     input_ids=new_input_pruning['input_ids'],
                     past_key_values=place_describe_cache,
                     use_cache=True,
-                    output_attentions=h2o_enabled(),
+                    output_attentions=h2o_enabled() and h2o_use_attention_scores(),
                 )
             next_token = outputs.logits.argmax(dim=-1)[:, -1:]
             next_token_id = int(next_token[0][0])
@@ -1602,12 +1924,25 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
             place_describe_cache = outputs.past_key_values
             if h2o_enabled():
                 try:
-                    attention_scores = build_attention_heavy_scores(getattr(outputs, "attentions", None))
+                    if h2o_heavy_scores is not None:
+                        h2o_heavy_scores = torch.cat(
+                            [
+                                h2o_heavy_scores.detach().flatten(),
+                                torch.zeros(1, dtype=h2o_heavy_scores.dtype, device=h2o_heavy_scores.device),
+                            ],
+                            dim=0,
+                        )
+                    attention_scores = (
+                        build_attention_heavy_scores(getattr(outputs, "attentions", None))
+                        if h2o_use_attention_scores()
+                        else None
+                    )
                     h2o_heavy_scores = merge_heavy_scores(h2o_heavy_scores, attention_scores)
                     legacy_cache = convert_runtime_kv_to_legacy_cache(place_describe_cache)
                     legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
                         legacy_cache,
                         heavy_scores=h2o_heavy_scores,
+                        protected_suffix=prompt_pruning_token_count + h2o_decode_step,
                         label="decode",
                     )
                     if h2o_stats.get("applied"):
@@ -1622,6 +1957,8 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
                                 f"kept_recent={h2o_stats.get('kept_recent')} "
                                 f"kept_heavy={h2o_stats.get('kept_heavy')} "
                                 f"protected_prefix={h2o_stats.get('protected_prefix')} "
+                                f"protected_suffix={h2o_stats.get('protected_suffix')} "
+                                f"prefix_outside_budget={h2o_stats.get('protected_prefix_outside_budget')} "
                                 f"budget={h2o_stats.get('budget')}"
                             )
                 except Exception as exc:
@@ -1646,7 +1983,10 @@ def planning(place_describe,place_describe_cache,final_goal,trajectory,allowed_o
     llava_answer2 = real_output2.strip()
     planning_elapsed = time.perf_counter() - planning_start_time
     planning_mode = "kv" if effective_use_kv_cache else "no-kv"
-    print(f"[Timing] planning mode={planning_mode} elapsed={planning_elapsed:.3f}s")
+    print(
+        f"[Timing] planning mode={planning_mode} elapsed={planning_elapsed:.3f}s "
+        f"final_cache_seq={get_kv_cache_seq_len(place_describe_cache) if effective_use_kv_cache else None}"
+    )
 
     return llava_answer2
 
@@ -1660,11 +2000,16 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
     final_goal = canonical_goal_name(final_goal)
     visible_ratio_threshold = float(os.environ.get("EFFICIENTNAV_VISIBLE_RATIO_THRESHOLD", "0.002"))
     min_visible_bbox_side_px = int(os.environ.get("EFFICIENTNAV_MIN_VISIBLE_BBOX_SIDE_PX", "24"))
-    goal_success_visible_ratio_threshold = float(
-        os.environ.get("EFFICIENTNAV_GOAL_SUCCESS_VISIBLE_RATIO_THRESHOLD", "0.01")
-    )
-    goal_success_min_bbox_side_px = int(
-        os.environ.get("EFFICIENTNAV_GOAL_SUCCESS_MIN_BBOX_SIDE_PX", "64")
+    goal_success_thresholds = get_goal_success_thresholds(final_goal)
+    goal_success_visible_ratio_threshold = float(goal_success_thresholds["semantic_visible_ratio"])
+    goal_success_min_bbox_side_px = int(goal_success_thresholds["semantic_min_bbox_side"])
+    goal_success_rgb_min_bbox_side_px = int(goal_success_thresholds["rgb_min_bbox_side"])
+    print(
+        f"[Debug] goal success thresholds: goal={final_goal} "
+        f"size_class={goal_success_thresholds['size_class']} "
+        f"semantic_visible_ratio={goal_success_visible_ratio_threshold} "
+        f"semantic_min_bbox_side={goal_success_min_bbox_side_px} "
+        f"rgb_min_bbox_side={goal_success_rgb_min_bbox_side_px}"
     )
 
     # ==========================================================================================================================================
@@ -1729,6 +2074,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
 
     sub_goal_history = []
     final_length = 0
+    trajectory_length = 0.0
 
 
     last_target_position = agent_state.position
@@ -2092,15 +2438,6 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                     continue
                 ordered_labels.append(label)
                 seen.add(label)
-            if place_target_visit_counts.get(place_idx, 0) > 0:
-                transition_labels = [
-                    label for label in ordered_labels
-                    if canonical_goal_name(label) in transition_planner_labels
-                ]
-                if transition_labels:
-                    ordered_labels = order_labels_by_goal_relevance(transition_labels)
-                else:
-                    ordered_labels = []
             base_allowed_by_place[place_idx] = ordered_labels
 
         unseen_places = {
@@ -2356,7 +2693,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
             preselected_planner_choice = direct_goal_choice
             llava_answer2 = json.dumps(direct_goal_choice, ensure_ascii=False)
             print(f"[Debug] bypassing planner because goal is already observed: {llava_answer2}")
-        elif len(allowed_objects) == 1:
+        elif single_object_bypass and len(allowed_objects) == 1:
             single_label = canonical_goal_name(allowed_objects[0])
             for place_idx, targets in allowed_targets_by_place.items():
                 for candidate in targets:
@@ -2600,9 +2937,10 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
 
         observations = []
         semantic_observations = []
-        # Preserve the recorded floor height from the simulator instead of
-        # forcing all navigation targets onto y=0.0.
-        agent_state.position = copy.deepcopy(topomap.now.position)
+        # Keep the map cursor on the place that observed the selected target,
+        # but do not move the agent back there. Movement to the sub-goal should
+        # start from the agent's actual current pose.
+        agent_state.position = copy.deepcopy(agent.get_state().position)
         agent_state.rotation = float(angle_goal)
         agent.set_state(agent_state)
         obs = sim.get_sensor_observations()
@@ -2782,6 +3120,24 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                                 episode_success = True
                                 visible_goal_id = best_goal_id
                                 visible_goal_name, visible_goal_target_position, _ = get_object_position(best_goal_id)
+                                direction_to_visible_goal = (
+                                    np.array(visible_goal_target_position, dtype=np.float32)
+                                    - np.array(agent.state.position, dtype=np.float32)
+                                )
+                                direction_to_visible_goal[1] = 0.0
+                                if np.linalg.norm(direction_to_visible_goal) > 1e-6:
+                                    agent_state = ThorAgentState(
+                                        np.array(agent.state.position, dtype=np.float32),
+                                        vector_to_yaw(direction_to_visible_goal),
+                                    )
+                                    agent.set_state(agent_state)
+                                    observations = sim.get_sensor_observations()
+                                    color_image = observations["color_sensor"]
+                                    semantic_frame = observations["semantic_sensor"]
+                                    print(
+                                        f"[Debug] oriented camera toward final goal: "
+                                        f"label={canonical_goal_name(goal_name)} yaw={agent_state.rotation:.1f}"
+                                    )
                                 bbox_debug_path = f"tmp/navigation_images/final_goal_visible_step_{steps + 1}.png"
                                 if save_goal_bbox_debug(
                                     color_image,
@@ -2808,6 +3164,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                 if episode_success:
                     final_length += total_distance_traveled
                     length_this_epoch += total_distance_traveled
+                    trajectory_length += total_distance_traveled
                     if approach_visible_goal_with_gt and visible_goal_target_position is not None:
                         print("[Debug] final goal detected; approaching GT coordinates before stopping")
                         approach_stop_distance = 1.5
@@ -2856,10 +3213,11 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                                 approach_previous_position = approach_current_position.copy()
                             final_length += approach_distance_traveled
                             length_this_epoch += approach_distance_traveled
+                            trajectory_length += approach_distance_traveled
                         else:
                             print("[Debug] no path found for final goal close approach")
                     else:
-                        print("[Debug] final goal detected by observation; stopping without GT coordinate approach")
+                        print("[Debug] final goal detected by observation; stopping at current position without GT coordinate approach")
                     sr = 1
                     spl = 1 if final_length == 0 else min(1, distance / max(final_length, 1e-6))
                     break
@@ -2876,6 +3234,7 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
                             total_distance_traveled += 0.25
                 final_length += total_distance_traveled
                 length_this_epoch += total_distance_traveled
+                trajectory_length += total_distance_traveled
             else:
                 print('No path found')
         if not(last_answer == llava_answer2 and use_pruning):
@@ -2888,7 +3247,8 @@ def val_one_episode(topomap,sim,agent,start_point,start_rotation,final_goal_id,f
     episode_elapsed = time.perf_counter() - episode_start_time
     print(
         f"[Timing] episode elapsed={episode_elapsed:.3f}s sr={sr} "
-        f"spl={spl:.4f} final_length={final_length:.4f}"
+        f"spl={spl:.4f} final_length={final_length:.4f} "
+        f"trajectory_length={trajectory_length:.4f}"
     )
     return sr,spl,real_distance,final_length
 

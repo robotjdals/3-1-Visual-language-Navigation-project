@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.18570932745933533
+Total Episodes: 1
+Total Length: 119.50066375732422
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.18570932745933533
+Hard Episodes: 1
+Hard Length: 119.50066375732422
+SR eposion: [0]
+SR subgoal: ['winebottle']
+num_node: 17

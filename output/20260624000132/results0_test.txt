@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.5923317670822144
+Total Episodes: 1
+Total Length: 15.821067810058594
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.5923317670822144
+Hard Episodes: 1
+Hard Length: 15.821067810058594
+SR eposion: [0]
+SR subgoal: ['tv']
+num_node: 5

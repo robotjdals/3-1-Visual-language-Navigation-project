@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.14067034423351288
+Total Episodes: 1
+Total Length: 87.4619369506836
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.14067034423351288
+Hard Episodes: 1
+Hard Length: 87.4619369506836
+SR eposion: [0]
+SR subgoal: ['plant']
+num_node: 15

@@ -13,24 +13,35 @@ try:
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
         build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_enabled,
+        h2o_use_attention_scores,
         merge_heavy_scores,
+        protected_prefix_before_marker,
     )
 except ImportError:
     from .h2o_cache import (
         apply_h2o_to_legacy_cache,
         build_attention_heavy_scores,
         build_goal_heavy_scores,
+        build_segment_heavy_scores,
+        build_semantic_heavy_scores,
         h2o_enabled,
+        h2o_use_attention_scores,
         merge_heavy_scores,
+        protected_prefix_before_marker,
     )
 
 width_weight = 0.001
 gpu_node_num = 20
 use_pruning = True
 layer_threshold = 5
+rich_memory_enabled = True
+rich_memory_max_objects_per_angle = 4
+rich_memory_max_total_objects = 12
 low_information_memory_labels = {"wall", "floor", "ceiling"}
-frontier_memory_labels = {"doorway", "door frame", "door", "window"}
+frontier_memory_labels = {"doorway", "door frame", "window"}
 structural_phrase_tokens = {
     "a", "an", "the", "of", "with", "corner", "wall", "floor", "ceiling",
     "tiled", "pattern"
@@ -116,6 +127,8 @@ class Navigation_map:
         self.used_groups = []
         self.place_clip_id = []
         self.kv_cache_supported = True
+        self.weak_goal_evidence = {}
+        self.observed_goal_instances = {}
 
     def disable_kv_cache(self, reason: str):
         self.use_kv_cache = False
@@ -147,7 +160,9 @@ class Navigation_map:
         keyword_groups = [
             ({"toilet"}, "toilet"),
             ({"sink"}, "sink"),
-            ({"doorway", "door", "doors", "doorframe", "frame"}, "doorway"),
+            ({"doorway", "doorframe"}, "doorway"),
+            ({"door", "doors"}, "door"),
+            ({"frame"}, "door frame"),
             ({"window", "windows"}, "window"),
             ({"mirror"}, "mirror"),
             ({"television", "tv", "tvstand"}, "tv"),
@@ -280,6 +295,7 @@ class Navigation_map:
         normalized_text = self._normalize_similarity_text(describe_text)
         if not normalized_text:
             return None
+        normalized_text = f"<|retrieved_memory|>\n{normalized_text}\n<|/retrieved_memory|>"
         if hasattr(self.processor, "apply_chat_template"):
             conversation_kv = [{"role": "user", "content": normalized_text}]
             try:
@@ -301,7 +317,7 @@ class Navigation_map:
                 "input_ids": inputs_kv["input_ids"],
                 "use_cache": True,
                 "past_key_values": runtime_cache,
-                "output_attentions": h2o_enabled(),
+                "output_attentions": h2o_enabled() and h2o_use_attention_scores(),
             }
             if runtime_cache is None:
                 forward_kwargs["attention_mask"] = inputs_kv.get("attention_mask")
@@ -313,16 +329,37 @@ class Navigation_map:
             inputs_kv["input_ids"].shape[1],
         )
         if h2o_enabled():
-            attention_scores = build_attention_heavy_scores(getattr(output_kv, "attentions", None))
+            attention_scores = (
+                build_attention_heavy_scores(getattr(output_kv, "attentions", None))
+                if h2o_use_attention_scores()
+                else None
+            )
             goal_scores = build_goal_heavy_scores(
                 self.processor,
                 inputs_kv["input_ids"][0],
                 h2o_goal_label or self.h2o_goal_label,
             )
+            segment_scores = build_segment_heavy_scores(
+                self.processor,
+                inputs_kv["input_ids"][0],
+            )
+            semantic_scores = build_semantic_heavy_scores(
+                self.processor,
+                inputs_kv["input_ids"][0],
+                h2o_goal_label or self.h2o_goal_label,
+            )
             heavy_scores = merge_heavy_scores(attention_scores, goal_scores)
+            heavy_scores = merge_heavy_scores(heavy_scores, segment_scores)
+            heavy_scores = merge_heavy_scores(heavy_scores, semantic_scores)
+            auto_protected_prefix = protected_prefix_before_marker(
+                self.processor,
+                inputs_kv["input_ids"][0],
+                "<|retrieved_memory|>",
+            )
             legacy_cache, h2o_stats = apply_h2o_to_legacy_cache(
                 legacy_cache,
                 heavy_scores=heavy_scores,
+                protected_prefix=auto_protected_prefix,
                 label=h2o_label,
             )
             if h2o_stats.get("applied"):
@@ -334,6 +371,8 @@ class Navigation_map:
                     f"kept_recent={h2o_stats.get('kept_recent')} "
                     f"kept_heavy={h2o_stats.get('kept_heavy')} "
                     f"protected_prefix={h2o_stats.get('protected_prefix')} "
+                    f"protected_suffix={h2o_stats.get('protected_suffix')} "
+                    f"prefix_outside_budget={h2o_stats.get('protected_prefix_outside_budget')} "
                     f"budget={h2o_stats.get('budget')}"
                 )
         return legacy_cache
@@ -383,6 +422,27 @@ class Navigation_map:
             cache.update(key_states, value_states, layer_idx)
         return cache
 
+    def _legacy_cache_seq_len(self, legacy_cache):
+        if not isinstance(legacy_cache, tuple) or not legacy_cache:
+            return None
+        try:
+            return int(legacy_cache[0][0].shape[-2])
+        except Exception:
+            return None
+
+    def _token_count(self, text):
+        if self.processor is None or not str(text or "").strip():
+            return 0
+        try:
+            input_ids = self.processor(text)["input_ids"]
+            if hasattr(input_ids, "shape"):
+                return int(input_ids.shape[-1])
+            if input_ids and isinstance(input_ids[0], list):
+                return len(input_ids[0])
+            return len(input_ids)
+        except Exception:
+            return None
+
     def add_node(self, parent_key: str, key: str, position: List[float], direction: float, waypoint, distance_to_parent: float, picture, describe):
         if not self.root:
             self.root = TreeNode(key, position, direction, waypoint, distance_to_parent, None, picture, describe)
@@ -415,11 +475,21 @@ class Navigation_map:
         if self.num_node > 1 and node.group is not None:
             group_prefix_text = self._get_group_prefix_text(node.group, self.root, node)
             if group_prefix_text:
+                group_tokens = self._token_count(group_prefix_text)
+                print(
+                    f"[Debug] KV cache group prefill: node={node.key} group={node.group} "
+                    f"tokens={group_tokens}"
+                )
                 group_kv = self._build_cache_from_text(group_prefix_text)
         for i in num_node:
             describe += node.describe[i]
         node.describe_kv = self._build_cache_from_text(describe, past_key_values=group_kv)
         node.describe_kv_signature = tuple(num_node)
+        print(
+            f"[Debug] KV cache node build: node={node.key} group={node.group} "
+            f"indices={list(num_node)} built={node.describe_kv is not None} "
+            f"cache_seq={self._legacy_cache_seq_len(node.describe_kv)}"
+        )
         if self.device_map is None and node.describe_kv is not None:
             self.device_map = [[tensor[0].device, tensor[1].device] for tensor in node.describe_kv]
         if node.key not in self.store_in_gpu and node.describe_kv is not None:
@@ -556,8 +626,95 @@ class Navigation_map:
             if self._is_productive_description(node.describe[i], final_goal_label)
         ]
         if productive_indices:
-            return productive_indices
+            selected_indices = list(productive_indices)
+            supporting_indices = []
+            for i in active_indices:
+                if i in selected_indices:
+                    continue
+                labels = self._extract_description_labels(node.describe[i])
+                normalized_labels = {
+                    self._canonical_similarity_label(label)
+                    for label in labels
+                }
+                if (
+                    normalized_labels & frontier_memory_labels
+                    or (final_goal_label and self._canonical_similarity_label(final_goal_label) in normalized_labels)
+                ):
+                    supporting_indices.append(i)
+            selected_indices.extend(supporting_indices[:2])
+            return selected_indices
         return active_indices
+
+    def _build_place_memory_summary(self, node, selected_indices, final_goal_label):
+        if not rich_memory_enabled or node is None or not node.describe:
+            return ""
+        angle_to_objects = {}
+        all_objects = []
+        frontier_objects = []
+        goal_related_objects = []
+        normalized_goal = self._canonical_similarity_label(final_goal_label)
+
+        for i in selected_indices:
+            if i < 0 or i >= len(node.describe):
+                continue
+            try:
+                describe_data = json.loads(node.describe[i])
+            except Exception:
+                continue
+            angle_value = int(describe_data.get("Angle", 0))
+            objects = []
+            for raw_obj in describe_data.get("Objects", []):
+                normalized_obj = self._compact_similarity_label(raw_obj)
+                if not normalized_obj:
+                    continue
+                if normalized_obj not in objects:
+                    objects.append(normalized_obj)
+                if normalized_obj not in all_objects:
+                    all_objects.append(normalized_obj)
+                if normalized_obj in frontier_memory_labels and normalized_obj not in frontier_objects:
+                    frontier_objects.append(normalized_obj)
+                if normalized_goal and normalized_obj == normalized_goal and normalized_obj not in goal_related_objects:
+                    goal_related_objects.append(normalized_obj)
+            if objects:
+                limited_objects = objects[:rich_memory_max_objects_per_angle]
+                existing = angle_to_objects.setdefault(angle_value, [])
+                for obj in limited_objects:
+                    if obj not in existing:
+                        existing.append(obj)
+
+        if not angle_to_objects and not all_objects:
+            return ""
+
+        summary_parts = [f"{node.key} summary:"]
+        if all_objects:
+            summary_parts.append(
+                " salient="
+                + ", ".join(all_objects[:rich_memory_max_total_objects])
+                + "."
+            )
+        if frontier_objects:
+            summary_parts.append(
+                " frontier="
+                + ", ".join(frontier_objects[:4])
+                + "."
+            )
+        if goal_related_objects:
+            summary_parts.append(
+                " goal_like="
+                + ", ".join(goal_related_objects[:4])
+                + "."
+            )
+        ordered_angles = sorted(angle_to_objects.items(), key=lambda item: item[0])
+        angle_descriptions = []
+        for angle_value, objects in ordered_angles[:4]:
+            if not objects:
+                continue
+            angle_descriptions.append(
+                f"angle {angle_value}: {', '.join(objects[:rich_memory_max_objects_per_angle])}"
+            )
+        if angle_descriptions:
+            summary_parts.append(" observations=" + " ; ".join(angle_descriptions) + ".")
+        return "".join(summary_parts) + " "
 
     def create_describe(self, node, last_key, last_index, target_index, final_goal_label):
         if use_pruning:
@@ -571,6 +728,7 @@ class Navigation_map:
             describe = f'{node.key} : '
             selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
             if selected_indices:
+                describe += self._build_place_memory_summary(node, selected_indices, final_goal_label)
                 for i in selected_indices:
                     describe += node.describe[i]
             else:
@@ -641,6 +799,7 @@ class Navigation_map:
             selected_indices = self._get_selected_description_indices(node, last_key, last_index, final_goal_label)
             if selected_indices:
                 self.used_groups.append(node.group)
+                describe += self._build_place_memory_summary(node, selected_indices, final_goal_label)
                 for i in selected_indices:
                     describe += node.describe[i]
         for child in node.children:
@@ -651,6 +810,7 @@ class Navigation_map:
         del model
         self.h2o_goal_label = final_goal_label
         describe = self._create_describe_for_cache(node, last_key, last_index, target_index, final_goal_label)
+        describe_token_count = self._token_count(describe)
         describe_kv = (
             self._build_cache_from_text(
                 describe,
@@ -659,5 +819,11 @@ class Navigation_map:
             )
             if describe.strip()
             else None
+        )
+        print(
+            f"[Debug] KV cache describe build: enabled={self.use_kv_cache} "
+            f"supported={self.kv_cache_supported} built={describe_kv is not None} "
+            f"tokens={describe_token_count} cache_seq={self._legacy_cache_seq_len(describe_kv)} "
+            f"used_groups={list(self.used_groups)}"
         )
         return describe, describe_kv

@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.1570015400648117
+Total Episodes: 1
+Total Length: 86.32591247558594
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.1570015400648117
+Hard Episodes: 1
+Hard Length: 86.32591247558594
+SR eposion: [0]
+SR subgoal: ['laptop']
+num_node: 15

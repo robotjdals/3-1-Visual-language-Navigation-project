@@ -1,0 +1,19 @@
+SR: 1.0
+SPL: 0.09451264888048172
+Total Episodes: 1
+Total Length: 168.67994689941406
+Easy SR: 0.0
+Easy SPL: 0.0
+Easy Episodes: 0
+Easy Length: 0.0
+Medium SR: 0.0
+Medium SPL: 0.0
+Medium Episodes: 0
+Medium Length: 0.0
+Hard SR: 1.0
+Hard SPL: 0.09451264888048172
+Hard Episodes: 1
+Hard Length: 168.67994689941406
+SR eposion: [0]
+SR subgoal: ['toiletpaper']
+num_node: 25
