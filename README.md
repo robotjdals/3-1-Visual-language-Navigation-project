@@ -1,3 +1,5 @@
+> **Note.** This is a student project that builds on the code of **EfficientNav** (arXiv 2510.18546), with local changes. The original work belongs to the paper authors; the description below is theirs. My own object-search work is in [AtHOME-object-search](https://github.com/robotjdals/AtHOME-object-search).
+
 ## EfficientNav: On-Device Object-Goal Navigation with Navigation Map Caching and Retrieval
 This is also the official code repository for the paper [EfficientNav](https://arxiv.org/abs/2510.18546).
 
